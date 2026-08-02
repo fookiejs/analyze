@@ -14,4 +14,22 @@ export {
   relationEdgeKind,
 } from "./map.ts";
 export { defaultSensitiveKeys, isSensitiveKey, redact, redactText } from "./redact.ts";
+export type { Redactable, RedactableKinds } from "./redact.ts";
 export type { AnalyzeSource } from "./source.ts";
+export {
+  AnalyzeServer,
+  analyze,
+  defaultOptions,
+  maxStreamClients,
+  refreshIntervalMs,
+} from "./server.ts";
+export type { AnalyzeOptions } from "./server.ts";
+export { clientJs, indexHtml, stylesCss } from "./ui/page.ts";
+export {
+  loopbackHost,
+  maxPageSize,
+  newToken,
+  originAllowed,
+  securityHeaders,
+  tokenMatches,
+} from "./transport.ts";

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { appendItem } from "@fookiejs/core";
-import type { JsonValue } from "@fookiejs/core";
+import type { EntityRecord, JsonValue, LogEntry } from "@fookiejs/core";
 import { AnalyzeError } from "./errors.ts";
 
 export const redactedMarker = "[redacted]";
@@ -76,10 +76,20 @@ const shallowBag: z.ZodType<Record<string, JsonValue>> = z.record(
   z.custom<JsonValue>(() => true),
 );
 
+const scalarShape = z.union([z.string(), z.number(), z.boolean()]);
+
+export type RedactableKinds = {
+  json: JsonValue;
+  entity: EntityRecord;
+  logFields: Record<string, LogEntry["fields"][string]>;
+};
+
+export type Redactable = RedactableKinds[keyof RedactableKinds];
+
 export const maxRedactDepth = 12;
 
 export function redact(
-  value: JsonValue,
+  value: Redactable,
   deny: readonly string[] = defaultSensitiveKeys,
   depth: number = 0,
 ): JsonValue {
@@ -95,7 +105,11 @@ export function redact(
   }
   const asObject = shallowBag.safeParse(value);
   if (asObject.success === false) {
-    return value;
+    const asScalar = scalarShape.safeParse(value);
+    if (asScalar.success === false) {
+      return redactedMarker;
+    }
+    return asScalar.data;
   }
   const cleaned: Record<string, JsonValue> = {};
   for (const [key, nested] of Object.entries(asObject.data)) {
