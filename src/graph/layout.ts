@@ -36,10 +36,10 @@ export type Layout = {
   height: number;
 };
 
-export const nodeWidth = 190;
-export const nodeHeight = 56;
-export const columnGap = 110;
-export const rowGap = 34;
+export const nodeWidth = 208;
+export const nodeHeight = 64;
+export const columnGap = 132;
+export const rowGap = 28;
 
 function idsOf(nodes: readonly GraphNode[]): readonly string[] {
   let ids: readonly string[] = [];
@@ -84,45 +84,111 @@ export function layerFor(layers: readonly LayerOf[], id: string): number {
   return 0;
 }
 
-function settledIds(layers: readonly LayerOf[]): readonly string[] {
-  if (Array.isArray(layers) === false) {
-    throw AnalyzeError.create("layer assignment required");
+function rankOf(order: readonly string[], id: string): number {
+  let index = 0;
+  for (const candidate of order) {
+    if (candidate === id) {
+      return index;
+    }
+    index = index + 1;
   }
-  let ids: readonly string[] = [];
-  for (const entry of layers) {
-    ids = appendItem(ids, entry.id);
-  }
-  return ids;
+  return order.length;
 }
 
-function readyFor(id: string, edges: readonly GraphEdge[], settled: readonly string[]): boolean {
+function outgoingOf(edges: readonly GraphEdge[], id: string): readonly string[] {
+  let targets: readonly string[] = [];
   for (const edge of edges) {
-    if (edge.to !== id) {
+    if (edge.from !== id) {
       continue;
     }
-    if (settled.includes(edge.from) === false) {
+    if (targets.includes(edge.to)) {
+      continue;
+    }
+    targets = appendItem(targets, edge.to);
+  }
+  return targets;
+}
+
+function visitOrder(ids: readonly string[], edges: readonly GraphEdge[]): readonly string[] {
+  let finished: readonly string[] = [];
+  let entered: readonly string[] = [];
+  for (const root of ids) {
+    if (entered.includes(root)) {
+      continue;
+    }
+    let stack: readonly string[] = [root];
+    while (stack.length > 0) {
+      let current = root;
+      for (const top of stack.slice(-1)) {
+        current = top;
+      }
+      if (entered.includes(current) === false) {
+        entered = appendItem(entered, current);
+      }
+      let pushed = false;
+      for (const next of outgoingOf(edges, current)) {
+        if (entered.includes(next)) {
+          continue;
+        }
+        stack = appendItem(stack, next);
+        pushed = true;
+        break;
+      }
+      if (pushed === true) {
+        continue;
+      }
+      if (finished.includes(current) === false) {
+        finished = appendItem(finished, current);
+      }
+      stack = stack.slice(0, -1);
+    }
+  }
+  return finished.toReversed();
+}
+
+export function acyclicEdges(
+  ids: readonly string[],
+  edges: readonly GraphEdge[],
+): readonly GraphEdge[] {
+  const order = visitOrder(ids, edges);
+  let forward: readonly GraphEdge[] = [];
+  for (const edge of edges) {
+    if (rankOf(order, edge.from) >= rankOf(order, edge.to)) {
+      continue;
+    }
+    forward = appendItem(forward, edge);
+  }
+  return forward;
+}
+
+function relaxOnce(layers: readonly LayerOf[], edges: readonly GraphEdge[]): readonly LayerOf[] {
+  let next: readonly LayerOf[] = [];
+  for (const entry of layers) {
+    let deepest = entry.layer;
+    for (const edge of edges) {
+      if (edge.to !== entry.id) {
+        continue;
+      }
+      const candidate = layerFor(layers, edge.from) + 1;
+      if (candidate > deepest) {
+        deepest = candidate;
+      }
+    }
+    next = appendItem(next, { id: entry.id, layer: deepest });
+  }
+  return next;
+}
+
+function sameLayers(left: readonly LayerOf[], right: readonly LayerOf[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (const entry of left) {
+    if (layerFor(right, entry.id) !== entry.layer) {
       return false;
     }
   }
   return true;
-}
-
-function deepestParentOf(
-  id: string,
-  edges: readonly GraphEdge[],
-  layers: readonly LayerOf[],
-): number {
-  let deepest = 0;
-  for (const edge of edges) {
-    if (edge.to !== id) {
-      continue;
-    }
-    const parentLayer = layerFor(layers, edge.from) + 1;
-    if (parentLayer > deepest) {
-      deepest = parentLayer;
-    }
-  }
-  return deepest;
 }
 
 export function layerAssignment(
@@ -130,34 +196,17 @@ export function layerAssignment(
   edges: readonly GraphEdge[],
 ): readonly LayerOf[] {
   const ids = idsOf(nodes);
-  const usable = keptEdges(edges, ids);
+  const forward = acyclicEdges(ids, keptEdges(edges, ids));
   let layers: readonly LayerOf[] = [];
-  let guard = 0;
-  while (layers.length < ids.length) {
-    guard += 1;
-    if (guard > ids.length + 1) {
-      for (const id of ids) {
-        if (settledIds(layers).includes(id) === false) {
-          layers = appendItem(layers, { id, layer: guard });
-        }
-      }
-      return layers;
+  for (const id of ids) {
+    layers = appendItem(layers, { id, layer: 0 });
+  }
+  for (let pass = 0; pass < ids.length; pass = pass + 1) {
+    const relaxed = relaxOnce(layers, forward);
+    if (sameLayers(relaxed, layers)) {
+      return relaxed;
     }
-    const settled = settledIds(layers);
-    let placedThisRound = 0;
-    for (const id of ids) {
-      if (settled.includes(id)) {
-        continue;
-      }
-      if (readyFor(id, usable, settled) === false) {
-        continue;
-      }
-      layers = appendItem(layers, { id, layer: deepestParentOf(id, usable, layers) });
-      placedThisRound += 1;
-    }
-    if (placedThisRound === 0) {
-      continue;
-    }
+    layers = relaxed;
   }
   return layers;
 }

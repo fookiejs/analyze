@@ -1,6 +1,7 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { AnalyzeServer, defaultOptions } from "../src/server.ts";
+import { clientJs, indexHtml, stylesCss } from "../src/ui/page.ts";
 import type { AnalyzeSource } from "../src/source.ts";
 import type {
   ExternalSummary,
@@ -241,5 +242,58 @@ describe("analyze server", () => {
     assert.equal(res.status, 404);
     const body = (await res.json()) as { error: string };
     assert.equal(body.error, "no such view");
+  });
+});
+
+describe("listen failures", () => {
+  it("reports a busy port instead of taking the process down", async () => {
+    const first = AnalyzeServer.create(source, { ...defaultOptions(), port: [] });
+    first.run([String(port + 1)]);
+    const second = AnalyzeServer.create(source, { ...defaultOptions(), port: [] });
+    second.run([String(port + 1)]);
+
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    assert.equal(second.listenError().length, 1, "the loser must record why it could not listen");
+    for (const reason of second.listenError()) {
+      assert.match(reason, /EADDRINUSE/);
+    }
+    assert.equal(first.listenError().length, 0, "the winner must be unaffected");
+
+    await first.stop();
+    await second.stop();
+  });
+});
+
+describe("the page it serves", () => {
+  it("ships one stylesheet with the design tokens and every view", () => {
+    const css = stylesCss();
+    assert.match(css, /--background/, "the theme tokens must be present");
+    assert.match(css, /prefers-color-scheme: dark/, "it must answer both themes");
+    for (const selector of [".shell", ".sidebar", ".card", ".badge", ".canvas-wrap", ".trace"]) {
+      assert.ok(css.includes(selector), `${selector} must be styled`);
+    }
+  });
+
+  it("ships client code for the map camera and the trace tree", () => {
+    const js = clientJs();
+    for (const symbol of [
+      "fitMap",
+      "zoomAt",
+      "wireCamera",
+      "buildTree",
+      "passesOf",
+      "renderModelDetail",
+    ]) {
+      assert.ok(js.includes(symbol), `${symbol} must reach the browser`);
+    }
+    assert.equal(js.includes("innerHTML"), false, "the page must never reach for innerHTML");
+  });
+
+  it("marks up every view the nav offers", () => {
+    const html = indexHtml("n");
+    for (const view of ["map", "models", "runs", "outbox", "logs"]) {
+      assert.ok(html.includes(`data-view="${view}"`), `${view} needs a nav button`);
+      assert.ok(html.includes(`id="view-${view}"`), `${view} needs a section`);
+    }
   });
 });

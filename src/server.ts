@@ -83,6 +83,7 @@ export class AnalyzeServer {
   private readonly serverBox: { servers: readonly http.Server[] } = { servers: [] };
   private readonly clientBox: { clients: readonly http.ServerResponse[] } = { clients: [] };
   private readonly timerBox: { timers: readonly NodeJS.Timeout[] } = { timers: [] };
+  private readonly listenErrorBox: { reasons: readonly string[] } = { reasons: [] };
 
   private constructor(source: AnalyzeSource, options: AnalyzeOptions) {
     this.source = source;
@@ -127,6 +128,7 @@ export class AnalyzeServer {
         throw AnalyzeError.create("request handling must be async");
       }
     });
+    server.on("error", (err: Error) => this.reportListenFailure(server, err));
     for (const bound of listening) {
       server.listen(bound, this.bind);
       this.serverBox.servers = [server];
@@ -134,6 +136,30 @@ export class AnalyzeServer {
       return true;
     }
     return false;
+  }
+
+  private reportListenFailure(server: http.Server, err: Error): boolean {
+    const reason = z.string().min(1).safeParse(err.message);
+    this.listenErrorBox.reasons = reason.success === true ? [reason.data] : ["listen failed"];
+    let kept: readonly http.Server[] = [];
+    for (const running of this.serverBox.servers) {
+      if (running === server) {
+        continue;
+      }
+      kept = appendItem(kept, running);
+    }
+    this.serverBox.servers = kept;
+    return true;
+  }
+
+  listenError(): readonly string[] {
+    if (Array.isArray(this.listenErrorBox.reasons) === false) {
+      throw AnalyzeError.create("listen error box required");
+    }
+    if (this.listenErrorBox.reasons.length > 1) {
+      throw AnalyzeError.create("only the last listen failure is kept");
+    }
+    return this.listenErrorBox.reasons;
   }
 
   private startTicker(): boolean {

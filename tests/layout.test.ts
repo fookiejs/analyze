@@ -215,3 +215,48 @@ describe("application map", () => {
     assert.equal(observedNestingEdges(spans).length, 0);
   });
 });
+
+describe("cyclic graphs", () => {
+  it("still spreads a graph whose relation and nesting edges disagree", () => {
+    const nodes = [
+      { id: "model:Order", label: "Order", kind: "model" },
+      { id: "model:OrderLog", label: "OrderLog", kind: "model" },
+      { id: "model:Customer", label: "Customer", kind: "model" },
+      { id: "external:pay", label: "pay", kind: "external" },
+    ];
+    const edges = [
+      { from: "model:Order", to: "model:Customer", kind: "relation", label: "", weight: 1 },
+      { from: "model:OrderLog", to: "model:Order", kind: "relation", label: "", weight: 1 },
+      { from: "model:Order", to: "model:OrderLog", kind: "nests", label: "", weight: 1 },
+      { from: "model:Order", to: "external:pay", kind: "invokes", label: "", weight: 1 },
+    ];
+
+    const layout = layoutOf(nodes, edges);
+    const columns = new Set(layout.nodes.map((node) => node.x));
+    assert.ok(
+      columns.size >= 2,
+      "a two node cycle must not collapse the whole map into one column",
+    );
+    assert.ok(layout.width > 0);
+    for (const placed of layout.nodes) {
+      assert.ok(placed.layer < nodes.length, "no node may be pushed past the node count");
+    }
+  });
+
+  it("keeps a plain chain in dependency order", () => {
+    const nodes = [
+      { id: "a", label: "a", kind: "model" },
+      { id: "b", label: "b", kind: "model" },
+      { id: "c", label: "c", kind: "model" },
+    ];
+    const edges = [
+      { from: "a", to: "b", kind: "invokes", label: "", weight: 1 },
+      { from: "b", to: "c", kind: "invokes", label: "", weight: 1 },
+    ];
+    const layout = layoutOf(nodes, edges);
+    const byId = new Map(layout.nodes.map((node) => [node.id, node]));
+    assert.equal(byId.get("a")?.layer, 0);
+    assert.equal(byId.get("b")?.layer, 1);
+    assert.equal(byId.get("c")?.layer, 2);
+  });
+});

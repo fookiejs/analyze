@@ -31,17 +31,17 @@ attacker-authored statement instead.
 
 ### What the defaults do for you
 
-| Default                      | Behaviour                                                                       |
-| ---------------------------- | ------------------------------------------------------------------------------- |
-| Bind address                 | `127.0.0.1`. Loopback only unless you opt out.                                    |
-| Token                        | Required. Generated (24 random bytes) if you don't supply one.                    |
-| Token comparison             | `crypto.timingSafeEqual`, after a length check. Never stored in a cookie.         |
-| Origin                       | A request carrying a foreign `Origin` is refused. No CORS headers are ever sent.  |
-| Methods                      | GET only. There are no write endpoints in v1, by design.                          |
-| CSP                          | `default-src 'none'` with one per-response nonce shared by the header, the inline style and the inline script. |
-| Redaction                    | A key deny-list applied at any depth to run bodies, outbox inputs and log fields, on by default. |
-| Page size                    | Capped at 500 rows regardless of what the caller asks for.                        |
-| Live viewers                 | Capped at 16 SSE clients; one interval fans each tick out to all of them.         |
+| Default          | Behaviour                                                                                                      |
+| ---------------- | -------------------------------------------------------------------------------------------------------------- |
+| Bind address     | `127.0.0.1`. Loopback only unless you opt out.                                                                 |
+| Token            | Required. Generated (24 random bytes) if you don't supply one.                                                 |
+| Token comparison | `crypto.timingSafeEqual`, after a length check. Never stored in a cookie.                                      |
+| Origin           | A request carrying a foreign `Origin` is refused. No CORS headers are ever sent.                               |
+| Methods          | GET only. There are no write endpoints in v1, by design.                                                       |
+| CSP              | `default-src 'none'` with one per-response nonce shared by the header, the inline style and the inline script. |
+| Redaction        | A key deny-list applied at any depth to run bodies, outbox inputs and log fields, on by default.               |
+| Page size        | Capped at 500 rows regardless of what the caller asks for.                                                     |
+| Live viewers     | Capped at 16 SSE clients; one interval fans each tick out to all of them.                                      |
 
 There is deliberately no retry-the-dead-letter button. A write endpoint behind dev-grade auth is a
 worse trade than walking over to a psql prompt.
@@ -62,6 +62,15 @@ Layout is layered (Sugiyama-lite) and computed **server-side** in TypeScript, so
 unit-tested and deterministic. Not force-directed: a map that jitters on every refresh is one you
 cannot visually diff.
 
+The layering breaks cycles before it ranks anything, which is not optional: relation edges point
+child to parent while nesting edges point parent to child, so a model that nests a child which also
+references it forms a two node cycle. Without cycle breaking the whole map collapses into a single
+column.
+
+The canvas pans and zooms like any node editor: drag to pan, scroll to zoom at the cursor, `f` or the
+Fit button to frame everything, and clicking a node opens an inspector with its columns, its
+compensation pairs and the traffic the outbox recorded for it.
+
 ## The page
 
 The browser page ships as a TypeScript module exporting a string, because the build is bare `tsc`,
@@ -71,6 +80,21 @@ page still carries both nonces.
 Nothing is interpolated into it and it renders exclusively with `textContent` and `createElementNS`.
 `innerHTML` is a stored-XSS sink here, since log fields carry user-supplied request bodies; CI greps
 for it.
+
+## Operations, not requests
+
+The Operations view groups spans by their root run rather than listing rows. One entry is one root
+operation — whatever started it, whether an HTTP request, a GraphQL resolver or a line of code that
+ran at boot — and underneath it sits the tree of everything that operation caused: the externals it
+called and the nested creates, updates and deletes its flow started in turn.
+
+A suspended flow re-executes from the top on every resume, so a single root shows up as several
+**passes**. That is the truth of the engine, not a rendering artefact: pass 1 reserves stock and
+suspends, pass 2 replays the reserve and charges, pass 3 replays both and sends the receipt. Steps the
+outbox dispatcher performed on its own sit at trace level rather than inside a pass.
+
+Nesting comes from the parent the engine records, and time containment is only the fallback for spans
+that carry no recorded parent.
 
 ## Options
 
