@@ -54,6 +54,13 @@ describe("redaction", () => {
     assert.equal(isSensitiveKey("email", defaultSensitiveKeys), false);
   });
 
+  it("survives a cyclic object instead of overflowing the stack", () => {
+    const looped: Record<string, unknown> = { name: "root", password: "hunter2" };
+    looped.self = looped;
+    const cleaned = JSON.stringify(redact(looped as never));
+    assert.match(cleaned, /\[redacted\]/, "the depth guard, not the stack, ends the walk");
+  });
+
   it("stops descending past the depth limit", () => {
     let deep: Record<string, unknown> = { password: "leaf" };
     for (let i = 0; i < maxRedactDepth + 6; i += 1) {

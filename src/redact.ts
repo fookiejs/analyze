@@ -71,6 +71,11 @@ export const jsonSchema: z.ZodType<JsonValue> = z.lazy(() =>
   ]),
 );
 
+const shallowBag: z.ZodType<Record<string, JsonValue>> = z.record(
+  z.string(),
+  z.custom<JsonValue>(() => true),
+);
+
 export const maxRedactDepth = 12;
 
 export function redact(
@@ -88,7 +93,7 @@ export function redact(
     }
     return items;
   }
-  const asObject = z.record(z.string(), jsonSchema).safeParse(value);
+  const asObject = shallowBag.safeParse(value);
   if (asObject.success === false) {
     return value;
   }
