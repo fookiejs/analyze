@@ -1,8 +1,6 @@
 import fookie from "@fookiejs/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
 
-// Same carve-out core uses: test bodies are short arrow callbacks that legitimately
-// construct absent values, and node:test's describe/it return promises nobody awaits.
 const relaxedForTests = {
   "fookie/no-async-without-await": "off",
   "fookie/min-function-lines": "off",
@@ -43,10 +41,6 @@ export default [
     },
   },
   {
-    // The transport owns Node's http lifecycle, whose callbacks are inherently short
-    // blocks, and it carries inbound JSON. The pure layers -- the graph layout, the
-    // map builder and redaction -- stay under the full rule set, and that is where
-    // the logic worth protecting lives.
     files: ["src/transport.ts", "src/server.ts"],
     rules: {
       "fookie/min-function-lines": "off",
