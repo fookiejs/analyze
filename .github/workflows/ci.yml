@@ -1,0 +1,195 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION_PRIMARY: "24"
+  CORE_REF: "main"
+
+jobs:
+  static:
+    name: static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: analyze
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: fookiejs/core
+          ref: ${{ env.CORE_REF }}
+          path: core
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION_PRIMARY }}
+
+      - name: build the linked core
+        working-directory: core
+        run: |
+          npm ci
+          npm run build
+
+      - name: install
+        working-directory: analyze
+        run: npm ci
+
+      - name: lint
+        working-directory: analyze
+        run: npm run lint
+      - name: format
+        working-directory: analyze
+        run: npm run format:check
+      - name: typecheck (src, must be clean)
+        working-directory: analyze
+        run: npm run typecheck
+      - name: typecheck (src + tests)
+        working-directory: analyze
+        run: npm run typecheck:all
+      - name: build
+        working-directory: analyze
+        run: npm run build
+
+      - name: published package contains only dist
+        working-directory: analyze
+        run: |
+          npm pack --dry-run --json > "$RUNNER_TEMP/pack.json"
+          node -e "
+            const files = JSON.parse(require('fs').readFileSync(process.env.RUNNER_TEMP + '/pack.json','utf8'))[0].files.map(f => f.path);
+            const stray = files.filter(f => f !== 'package.json' && f !== 'README.md' && f !== 'LICENSE' && f.startsWith('dist/') === false);
+            if (stray.length > 0) { console.error('unexpected files in package tarball:', stray); process.exit(1); }
+            console.log(files.length + ' files, all under dist/');
+          "
+
+      - name: the browser page survives the build
+        working-directory: analyze
+        run: |
+          node --input-type=module -e "
+            const { indexHtml } = await import('./dist/index.js');
+            const page = indexHtml('test-nonce');
+            if (page.includes('<style nonce=\"test-nonce\">') === false) { console.error('the page lost its styles'); process.exit(1); }
+            if (page.includes('<script nonce=\"test-nonce\">') === false) { console.error('the page lost its script'); process.exit(1); }
+            console.log('page is ' + page.length + ' bytes and carries both nonces');
+          "
+
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22", "24"]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: analyze
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: fookiejs/core
+          ref: ${{ env.CORE_REF }}
+          path: core
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: build the linked core
+        working-directory: core
+        run: |
+          npm ci
+          npm run build
+
+      - name: install
+        working-directory: analyze
+        run: npm ci
+
+      - name: run tests
+        working-directory: analyze
+        run: npm test
+
+  invariants:
+    name: house invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: no module grows past 600 lines
+        env:
+          KNOWN_DEBT: ""
+        run: |
+          status=0
+          for f in $(find src -name '*.ts' | sort); do
+            n=$(wc -l < "$f")
+            case " $KNOWN_DEBT " in
+              *" $f "*)
+                echo "debt  $f ($n lines, exempt until decomposed)"
+                continue
+                ;;
+            esac
+            if [ "$n" -gt 600 ]; then
+              echo "over  $f ($n lines > 600)"
+              status=1
+            fi
+          done
+          test "$status" -eq 0
+
+      - name: the page never reaches for innerHTML
+        run: |
+          if grep -rn "innerHTML" src; then
+            echo "innerHTML is a stored-XSS sink here: log fields carry user-supplied request bodies"
+            exit 1
+          fi
+          echo "no innerHTML anywhere in src"
+
+      - name: no write route reaches the HTTP surface
+        run: |
+          if grep -rnE "\"(POST|PUT|PATCH|DELETE)\"" src; then
+            echo "this surface is read only by design"
+            exit 1
+          fi
+          echo "src declares no write method"
+
+      - name: report module sizes
+        if: always()
+        run: |
+          {
+            echo "### Module sizes"
+            echo ''
+            echo '| module | lines |'
+            echo '| --- | --- |'
+            find src -name '*.ts' -exec sh -c 'echo "| \`$1\` | $(wc -l < "$1") |"' _ {} \; | sort -t'|' -k3 -rn
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  dependency-review:
+    name: dependency review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
+
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION_PRIMARY }}
+      - name: audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
