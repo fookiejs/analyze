@@ -66,6 +66,50 @@ behind `timingSafeEqual`, which is what the tests assert.
 There is deliberately no retry-the-dead-letter button. A write endpoint behind dev-grade auth is a
 worse trade than walking over to a psql prompt.
 
+## Where the numbers come from
+
+Worth being exact, because two of these are durable and three are not:
+
+| What                 | Source                                                                                        | Survives a restart |
+| -------------------- | --------------------------------------------------------------------------------------------- | ------------------ |
+| Outbox rows          | `fookie_outbox` in Postgres, read through `app.outboxList()`                                  | yes                |
+| Runs and their phase | `fookie_run` in Postgres, read through `app.runList()`                                        | yes                |
+| Logs                 | an in-memory ring inside the app process, written by `flow.log(...)`                          | **no**             |
+| Metrics              | the same ring set, written by `flow.metric.*`                                                 | **no**             |
+| Traces               | the same, written by the span the engine wraps around every operation and every external call | **no**             |
+
+The three rings hold ten thousand entries each and drop the oldest — measured at roughly **eighteen
+minutes** of history on the demo. OpenTelemetry is present as an **API only**: there is no SDK and no
+exporter anywhere in core, so the tracer is a no-op and these buffers are the entire record. They die
+with the process. "What happened last night" is a question analyze cannot answer today, and that is a
+decision waiting to be made rather than an oversight.
+
+## Every page is about the same request
+
+A request id is clickable wherever it appears — in the logs, in the outbox, on an operation in the
+tree. Clicking it follows that request: the map draws it, a bar at the top names it, and the logs and
+outbox narrow to it. The bar carries links back to each view and a way to stop following.
+
+A followed request reads its own outbox rows rather than filtering the shared window, so it stays
+correct however far back the request is. When a filtered view is empty it says why — logs live in
+memory only, so an old request genuinely has nothing left to show.
+
+The canvas opens showing everything, flows and relations together, with switches to look at one plane
+at a time.
+
+## It streams deltas, not the world
+
+The dashboard used to refetch everything on every tick: measured at **~4 MB every three seconds**, of
+which 3.8 MB was the observability page alone. Core has always returned `nextSeq` and `oldestSeq` so a
+client can ask only for what is new, and this one ignored both.
+
+It now carries a cursor and merges what arrives into bounded local buffers — measured at **32 to 140 KB
+per tick**, proportional to what happened rather than to how much history exists. The catalog, the map
+and the listings refresh every fourth tick, since their shape changes far more slowly than the log does.
+
+`oldestSeq` is what makes that honest rather than merely cheap: when the ring drops entries a client
+never saw, the sidebar says how many instead of quietly skipping them.
+
 ## The map is two maps
 
 The **declared** map comes from `catalog()`: model cards, external cards, relation edges and
