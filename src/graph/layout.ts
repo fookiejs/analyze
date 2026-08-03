@@ -1,6 +1,17 @@
 import { z } from "zod";
 import { appendItem } from "@fookiejs/core";
 import { AnalyzeError } from "../errors.ts";
+import {
+  bandAssignment,
+  bandFor,
+  bandGap,
+  columnAssignment,
+  dataBand,
+  spineBand,
+  undoBand,
+  shelfOrder,
+} from "./bands.ts";
+import type { BandOf } from "./bands.ts";
 
 export type GraphPort = {
   id: string;
@@ -350,45 +361,58 @@ function orderKeyOf(edges: readonly GraphEdge[], node: GraphNode): string {
   return `${step}:${padded}:${node.label}`;
 }
 
-function columnOf(
+function seatsIn(
   nodes: readonly GraphNode[],
-  layers: readonly LayerOf[],
+  columns: readonly LayerOf[],
+  bands: readonly BandOf[],
+  band: number,
   column: number,
   edges: readonly GraphEdge[],
 ): readonly GraphNode[] {
-  let inColumn: readonly GraphNode[] = [];
+  let seated: readonly GraphNode[] = [];
   for (const node of nodes) {
-    if (layerFor(layers, node.id) === column) {
-      inColumn = appendItem(inColumn, node);
+    if (bandFor(bands, node.id) !== band) {
+      continue;
     }
+    if (layerFor(columns, node.id) !== column) {
+      continue;
+    }
+    seated = appendItem(seated, node);
   }
-  return inColumn.toSorted((left, right) =>
+  return seated.toSorted((left, right) =>
     orderKeyOf(edges, left).localeCompare(orderKeyOf(edges, right)),
   );
 }
 
-export function layoutOf(nodes: readonly GraphNode[], edges: readonly GraphEdge[]): Layout {
-  if (nodes.length < 1) {
-    return { nodes: [], edges: [], width: 0, height: 0 };
-  }
-  const ids = idsOf(nodes);
-  const usable = keptEdges(edges, ids);
-  const layers = layerAssignment(nodes, usable);
-
+function deepestOf(nodes: readonly GraphNode[], columns: readonly LayerOf[]): number {
   let deepest = 0;
   for (const node of nodes) {
-    const layer = layerFor(layers, node.id);
-    if (layer > deepest) {
-      deepest = layer;
+    const column = layerFor(columns, node.id);
+    if (column > deepest) {
+      deepest = column;
     }
   }
+  return deepest;
+}
 
+type BandFill = {
+  placed: readonly PlacedNode[];
+  height: number;
+};
+
+function fillBand(
+  nodes: readonly GraphNode[],
+  columns: readonly LayerOf[],
+  bands: readonly BandOf[],
+  band: number,
+  edges: readonly GraphEdge[],
+): BandFill {
+  const deepest = deepestOf(nodes, columns);
   let placed: readonly PlacedNode[] = [];
-  let tallest = 0;
+  let height = 0;
   for (let column = 0; column <= deepest; column += 1) {
     let cursor = 0;
-    for (const seat of columnOf(nodes, layers, column, usable)) {
-      const height = heightOf(seat);
+    for (const seat of seatsIn(nodes, columns, bands, band, column, edges)) {
       placed = appendItem(placed, {
         id: seat.id,
         label: seat.label,
@@ -400,25 +424,114 @@ export function layoutOf(nodes: readonly GraphNode[], edges: readonly GraphEdge[
         x: column * (nodeWidth + columnGap),
         y: cursor,
         width: nodeWidth,
-        height,
+        height: heightOf(seat),
       });
-      cursor = cursor + height + rowGap;
+      cursor = cursor + heightOf(seat) + rowGap;
     }
     const used = cursor > 0 ? cursor - rowGap : 0;
-    if (used > tallest) {
-      tallest = used;
+    if (used > height) {
+      height = used;
     }
   }
-
-  const centred = centreColumns(placed, tallest);
-  return {
-    nodes: centred,
-    edges: usable,
-    width: (deepest + 1) * nodeWidth + deepest * columnGap,
-    height: Math.max(tallest, 1),
-  };
+  return { placed, height };
 }
 
+function fillShelf(
+  nodes: readonly GraphNode[],
+  edges: readonly GraphEdge[],
+  bands: readonly BandOf[],
+  perRow: number,
+): BandFill {
+  const shelved = shelfOrder(nodes, edges, bands);
+  const stride = nodeWidth + columnGap;
+  let placed: readonly PlacedNode[] = [];
+  let rowTop = 0;
+  let rowTall = 0;
+  let index = 0;
+  for (const seat of shelved) {
+    const slot = index % perRow;
+    if (slot === 0 && index > 0) {
+      rowTop = rowTop + rowTall + rowGap;
+      rowTall = 0;
+    }
+    const height = heightOf(seat);
+    placed = appendItem(placed, {
+      id: seat.id,
+      label: seat.label,
+      kind: seat.kind,
+      subtitle: seat.subtitle,
+      ports: seat.ports,
+      fields: seat.fields,
+      layer: slot,
+      x: slot * stride,
+      y: rowTop,
+      width: nodeWidth,
+      height,
+    });
+    if (height > rowTall) {
+      rowTall = height;
+    }
+    index += 1;
+  }
+  return { placed, height: rowTop + rowTall };
+}
+function shifted(nodes: readonly PlacedNode[], down: number): readonly PlacedNode[] {
+  let moved: readonly PlacedNode[] = [];
+  for (const node of nodes) {
+    moved = appendItem(moved, {
+      id: node.id,
+      label: node.label,
+      kind: node.kind,
+      subtitle: node.subtitle,
+      ports: node.ports,
+      fields: node.fields,
+      layer: node.layer,
+      x: node.x,
+      y: node.y + down,
+      width: node.width,
+      height: node.height,
+    });
+  }
+  return moved;
+}
+
+export function layoutOf(nodes: readonly GraphNode[], edges: readonly GraphEdge[]): Layout {
+  if (nodes.length < 1) {
+    return { nodes: [], edges: [], width: 0, height: 0 };
+  }
+  const ids = idsOf(nodes);
+  const usable = keptEdges(edges, ids);
+  const layers = layerAssignment(nodes, usable);
+  const bands = bandAssignment(nodes, usable);
+  const columns = columnAssignment(nodes, usable, layers, bands);
+
+  let placed: readonly PlacedNode[] = [];
+  let cursor = 0;
+  const perRow = Math.max(deepestOf(nodes, columns) + 1, 1);
+  for (const band of [dataBand, spineBand, undoBand]) {
+    const filled =
+      band === dataBand
+        ? fillShelf(nodes, usable, bands, perRow)
+        : fillBand(nodes, columns, bands, band, usable);
+    if (filled.placed.length < 1) {
+      continue;
+    }
+    const seated = band === dataBand ? filled.placed : centreColumns(filled.placed, filled.height);
+    for (const node of shifted(seated, cursor)) {
+      placed = appendItem(placed, node);
+    }
+    cursor = cursor + filled.height + bandGap;
+  }
+
+  const deepest = deepestOf(nodes, columns);
+  const tall = cursor > 0 ? cursor - bandGap : 1;
+  return {
+    nodes: placed,
+    edges: usable,
+    width: (deepest + 1) * nodeWidth + deepest * columnGap,
+    height: Math.max(tall, 1),
+  };
+}
 function columnHeight(nodes: readonly PlacedNode[], column: number): number {
   let lowest = 0;
   for (const placed of nodes) {
