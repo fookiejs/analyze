@@ -239,52 +239,6 @@ function renderRuns() {
   for (const group of groups.slice(0, 120)) { renderTrace(host, group); }
 }
 
-function renderFocusRail() {
-  const rail = byId("focus-rail");
-  if (!rail) { return; }
-  clear(rail);
-  rail.appendChild(el("div", { class: "rail-label" }, "Lifecycle"));
-
-  const all = el("button", { "aria-selected": String(state.focus === "") }, "Everything");
-  all.addEventListener("click", () => setFocus(""));
-  rail.appendChild(all);
-
-  for (const model of state.catalog) {
-    const button = el("button", { "aria-selected": String(state.focus === model.name) }, model.name);
-    button.appendChild(el("span", { class: "tag" }, String(model.fields.length)));
-    button.addEventListener("click", () => setFocus(model.name));
-    rail.appendChild(button);
-  }
-
-  rail.appendChild(el("div", { class: "rail-label" }, "Recent requests"));
-  const none = el("button", { "aria-selected": String(state.selectedRun === "") }, "No request");
-  none.addEventListener("click", () => {
-    selectRun("").catch(fail);
-  });
-  rail.appendChild(none);
-
-  let shown = 0;
-  for (const run of state.runs) {
-    if (shown >= 12) { break; }
-    shown = shown + 1;
-    const chosen = state.selectedRun === run.runId;
-    const button = el("button", { "aria-selected": String(chosen) }, shortRunLabel(run));
-    button.appendChild(badge(run.phase, toneForPhase(run.phase)));
-    button.addEventListener("click", () => {
-      selectRun(run.runId).catch(fail);
-    });
-    rail.appendChild(button);
-  }
-  if (state.selectedRun.length > 0 && state.runTrail.waiting.length > 0) {
-    const note = el("div", { class: "rail-waiting" });
-    note.appendChild(el("div", { class: "rail-waiting-label" }, "waiting on"));
-    for (const name of state.runTrail.waiting) {
-      note.appendChild(el("div", { class: "rail-waiting-name" }, name));
-    }
-    rail.appendChild(note);
-  }
-}
-
 function shortRunLabel(run) {
   return run.model + "." + run.operation;
 }
@@ -304,7 +258,6 @@ function clearRunFilter() {
   state.runTrail = { steps: [], phase: "", waiting: [], model: "" };
   state.runRows = [];
   closeStep();
-  renderFocusRail();
   renderCrumb();
   paint();
 }
@@ -339,8 +292,7 @@ async function selectRun(runId) {
   if (state.selectedRun.length < 1) {
     state.runTrail = { steps: [], phase: "", waiting: [], model: "" };
     state.runRows = [];
-    renderFocusRail();
-    drawMap();
+      drawMap();
     return;
   }
   const rows = await load("/api/outbox?limit=200&runId=" + encodeURIComponent(state.selectedRun));
@@ -363,26 +315,13 @@ async function selectRun(runId) {
   }
   state.runTrail = { steps: steps, phase: phase, waiting: waiting, model: model };
   state.runFilter = state.selectedRun;
-  renderFocusRail();
   renderCrumb();
   renderRequestDetail(state.selectedRun);
   drawMap();
 }
 
-async function setFocus(name) {
-  state.focus = name;
-  state.selectedPort = "";
-  state.selectedNode = "";
-  state.camera.ready = false;
-  renderFocusRail();
-  state.graph = await load(graphPath());
-  drawMap();
-  renderInspector();
-}
-
 function graphPath() {
-  if (state.focus.length < 1) { return "/api/graph"; }
-  return "/api/graph?focus=" + encodeURIComponent(state.focus);
+  return "/api/graph";
 }
 `.trim();
 }

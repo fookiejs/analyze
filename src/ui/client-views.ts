@@ -386,7 +386,7 @@ function paint() {
     gap.hidden = state.dropped < 1;
     gap.textContent = String(state.dropped) + " entries aged out before you saw them";
   }
-  if (state.view === "map") { renderFocusRail(); drawMap(); renderInspector(); }
+  if (state.view === "map") { drawMap(); renderInspector(); }
   if (state.view === "models") { renderModels(); }
   if (state.view === "runs") { renderRuns(); }
   if (state.view === "outbox") { renderOutbox(); }

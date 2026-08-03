@@ -524,17 +524,19 @@ describe("the map lays a saga out as a staircase", () => {
     assert.equal(columnOf("external:pay"), 1);
   });
 
-  it("shows a model's own logs, metrics and operations when its card is opened", () => {
+  it("shows a model's own counters and hands the rest to the real listings", () => {
     const js = clientJs();
-    for (const symbol of [
-      "logsForModel",
-      "metricsForModel",
-      "operationsForModel",
-      "modelActivity",
-    ]) {
+    for (const symbol of ["metricsForModel", "modelActivity", "openFiltered"]) {
       assert.ok(js.includes(symbol), `${symbol} must reach the browser`);
     }
-    assert.ok(js.includes("Recent operations"), "the card links out to the runs it took part in");
+    assert.ok(
+      js.includes("Counted here"),
+      "metrics are an aggregate, so the panel is the right size for them",
+    );
+    assert.ok(
+      js.includes("Look at it in full"),
+      "logs and operations belong on their own pages, which have paging and filters",
+    );
   });
 });
 
@@ -588,6 +590,42 @@ describe("the dashboard survives the app it is watching restarting", () => {
     assert.ok(
       body.includes("refresh()"),
       "a reconnect that only flips the pulse to live leaves the page showing nothing",
+    );
+  });
+});
+
+describe("one place per question", () => {
+  it("stops repeating the log and operation listings inside the side panel", () => {
+    const js = clientJs();
+    assert.equal(js.includes("Recent logs"), false, "the logs page owns the logs");
+    assert.equal(
+      js.includes("Recent operations"),
+      false,
+      "the operations page owns the operations",
+    );
+    assert.equal(
+      js.includes("Recent requests"),
+      false,
+      "a rail of runs floating over the map is gone",
+    );
+  });
+
+  it("sends you to the full listing filtered to the model instead", () => {
+    const js = clientJs();
+    assert.ok(js.includes("openFiltered"), "the panel has to hand off to the real listing");
+    for (const view of ['"runs"', '"logs"', '"outbox"']) {
+      assert.ok(js.includes(view), `the panel must be able to open ${view}`);
+    }
+  });
+
+  it("drops the model focus rail that redrew the whole graph", () => {
+    const js = clientJs();
+    assert.equal(js.includes("renderFocusRail"), false, "the rail is gone");
+    assert.equal(js.includes("Lifecycle"), false, "and so is the label nobody could read");
+    assert.equal(
+      js.includes("/api/graph?focus="),
+      false,
+      "refetching a narrowed graph was what broke the drawing",
     );
   });
 });

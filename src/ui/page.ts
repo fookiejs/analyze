@@ -101,7 +101,6 @@ function topbarHtml(): string {
 function mapViewHtml(): string {
   return `<section id="view-map" class="canvas-wrap">
 <div id="map-canvas"></div>
-<div class="focus-rail" id="focus-rail"></div>
 <div class="map-controls" id="plane-switch">
 <button class="btn ghost" data-plane="both" aria-selected="true">Everything</button>
 <button class="btn ghost" data-plane="flow" aria-selected="false">Flows only</button>

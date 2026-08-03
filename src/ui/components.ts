@@ -361,6 +361,9 @@ export function mapCss(): string {
   border-bottom: 1px solid var(--border); font-size: 12px;
 }
 .meter:last-of-type { border-bottom: 0; }
+.jump {
+  display: block; width: 100%; text-align: left; margin: 5px 0;
+}
 
 .stuck {
   border: 1px solid var(--border); border-radius: 12px; background: var(--card);

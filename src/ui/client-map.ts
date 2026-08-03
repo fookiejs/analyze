@@ -393,15 +393,6 @@ function setPlane(plane) {
   renderInspector();
 }
 
-function logsForModel(name, keep) {
-  const found = [];
-  for (const entry of state.obs.logs) {
-    if (entry.model !== name) { continue; }
-    found.push(entry);
-  }
-  return found.toReversed().slice(0, keep);
-}
-
 function metricsForModel(name) {
   const totals = {};
   const order = [];
@@ -415,23 +406,28 @@ function metricsForModel(name) {
   return built;
 }
 
-function operationsForModel(name, keep) {
-  const seen = [];
-  const known = {};
-  for (const span of state.obs.spans.toReversed()) {
-    if (span.model !== name) { continue; }
-    if (isOperationSpan(span) === false) { continue; }
-    if (known[span.traceId]) { continue; }
-    known[span.traceId] = true;
-    seen.push(span);
-    if (seen.length >= keep) { return seen; }
+function openFiltered(view, model) {
+  state.search = model;
+  state.troubleOnly = false;
+  state.page = 0;
+  state.runFilter = "";
+  show(view);
+  paint();
+}
+
+function jumpRow(panel, label, view, model) {
+  const row = el("button", { class: "btn ghost jump" }, label);
+  row.addEventListener("click", () => openFiltered(view, model));
+  panel.appendChild(row);
+  if (!row) {
+    throw new Error("a jump row must exist");
   }
-  return seen;
+  return row;
 }
 
 function modelActivity(panel, name) {
   const counters = metricsForModel(name);
-  panel.appendChild(el("h3", {}, "Metrics"));
+  panel.appendChild(el("h3", {}, "Counted here"));
   if (counters.length === 0) {
     panel.appendChild(el("div", { class: "dim" }, "Nothing counted yet."));
   }
@@ -442,33 +438,13 @@ function modelActivity(panel, name) {
     panel.appendChild(row);
   }
 
-  const runs = operationsForModel(name, 8);
-  panel.appendChild(el("h3", {}, "Recent operations"));
-  if (runs.length === 0) {
-    panel.appendChild(el("div", { class: "dim" }, "No operation recorded on this model yet."));
-  }
-  for (const span of runs) {
-    const row = el("div", { class: "meter" });
-    row.appendChild(el("span", {}, span.name));
-    row.appendChild(el("span", { class: "meter-value mono dim" }, duration(ms(span.startedAt, span.endedAt))));
-    row.appendChild(runLink(span.traceId));
-    panel.appendChild(row);
-  }
-
-  const lines = logsForModel(name, 8);
-  panel.appendChild(el("h3", {}, "Recent logs"));
-  if (lines.length === 0) {
-    panel.appendChild(el("div", { class: "dim" }, "This model has logged nothing in the buffer."));
-  }
-  for (const entry of lines) {
-    const row = el("div", { class: "log-line" });
-    row.appendChild(badge(entry.level, toneForLevel(entry.level)));
-    row.appendChild(el("span", {}, entry.message));
-    row.appendChild(runLink(entry.traceId));
-    panel.appendChild(row);
-  }
+  panel.appendChild(el("h3", {}, "Look at it in full"));
+  panel.appendChild(el("div", { class: "dim card-desc" },
+    "The listings page and filters beat a short list in a side panel."));
+  jumpRow(panel, "Operations on " + name, "runs", name);
+  jumpRow(panel, "Logs from " + name, "logs", name);
+  jumpRow(panel, "Outbox for " + name, "outbox", name);
 }
-
 function renderInspector() {
   const panel = byId("inspector");
   if (!state.selectedNode) { panel.classList.remove("on"); clear(panel); return; }
