@@ -464,55 +464,99 @@ function xOf(placed: readonly { id: string; x: number }[], id: string): number {
   throw new Error(`${id} was not placed`);
 }
 
+function dataColumnCounts(placed: readonly { id: string; x: number }[]): readonly number[] {
+  const perColumn = new Map<number, number>();
+  for (const seat of placed) {
+    if (seat.id.startsWith("Data") === false) {
+      continue;
+    }
+    const seen = perColumn.get(seat.x) ?? 0;
+    perColumn.set(seat.x, seen + 1);
+  }
+  return [...perColumn.values()];
+}
+
+function shelfRows(placed: readonly { id: string; y: number }[]): number {
+  let rows: readonly number[] = [];
+  for (const seat of placed) {
+    if (seat.id.startsWith("Data") === false) {
+      continue;
+    }
+    if (rows.includes(seat.y) === false) {
+      rows = [...rows, seat.y];
+    }
+  }
+  return rows.length;
+}
+
 describe("relations sit on a shelf rather than ranking into a wall", () => {
-  const spine = [node("Order"), node("reserve"), node("charge"), node("refund")];
-  const satellites = [node("Customer"), node("Address"), node("Card"), node("Product")];
+  const spine = [node("Order"), node("reserve"), node("charge"), node("settle")];
   const wiring = [
     flowEdge("Order", "reserve", "invokes", 1),
     flowEdge("Order", "charge", "invokes", 2),
+    flowEdge("Order", "settle", "invokes", 3),
     flowEdge("charge", "refund", "compensates", 0),
-    edge("Order", "Customer"),
-    edge("Order", "Address"),
-    edge("Order", "Card"),
-    edge("Product", "Customer"),
   ];
 
-  it("gives every unranked model its own column instead of one tall stack", () => {
-    const placed = layoutOf([...spine, ...satellites], wiring).nodes;
-    const columns: number[] = [];
-    for (const name of ["Customer", "Address", "Card", "Product"]) {
-      const x = xOf(placed, name);
-      assert.equal(columns.includes(x), false, `${name} shares a column with another data model`);
-      columns.push(x);
+  function world(count: number) {
+    let satellites: GraphNode[] = [];
+    let edges = [...wiring];
+    for (let index = 0; index < count; index += 1) {
+      const name = `Data${String(index)}`;
+      satellites = [...satellites, node(name)];
+      edges = [...edges, edge("Order", name)];
     }
+    return layoutOf([...spine, node("refund"), ...satellites], edges);
+  }
+
+  it("never stacks the data models into one tall column", () => {
+    const laid = world(7);
+    const busiest = Math.max(...dataColumnCounts(laid.nodes));
+    assert.ok(busiest <= 2, `the wall is back: one column holds ${String(busiest)} data cards`);
   });
 
-  it("keeps the shelf on one row above the flow that touches it", () => {
-    const placed = layoutOf([...spine, ...satellites], wiring).nodes;
-    const shelfY = yOf(placed, "Customer");
-    for (const name of ["Address", "Card", "Product"]) {
+  it("keeps a shelf that fits on one row above the flow", () => {
+    const laid = world(3);
+    const placed = laid.nodes;
+    const shelfY = yOf(placed, "Data0");
+    for (const name of ["Data1", "Data2"]) {
       assert.equal(yOf(placed, name), shelfY, `${name} left the shelf row`);
     }
-    assert.ok(yOf(placed, "Order") > shelfY, "the flow has to sit below the data it touches");
+    for (const name of ["Data0", "Data1", "Data2"]) {
+      assert.ok(yOf(placed, "Order") > yOf(placed, name), `the flow has to sit below ${name}`);
+    }
   });
 
-  it("drops a compensation below the step it undoes", () => {
-    const placed = layoutOf([...spine, ...satellites], wiring).nodes;
+  it("wraps a shelf wider than the spine instead of growing a column", () => {
+    const laid = world(9);
+    let rows: readonly number[] = [];
+    for (const name of ["Data0", "Data4", "Data8"]) {
+      const y = yOf(laid.nodes, name);
+      if (rows.includes(y) === false) {
+        rows = [...rows, y];
+      }
+    }
+    assert.ok(rows.length > 1, "nine models across four columns have to wrap");
+  });
+
+  it("drops a compensation directly below the step it undoes", () => {
+    const placed = world(3).nodes;
     assert.ok(
       yOf(placed, "refund") > yOf(placed, "charge"),
       "an undo belongs underneath the thing it undoes",
     );
+    assert.equal(
+      xOf(placed, "refund"),
+      xOf(placed, "charge"),
+      "sharing the column makes the arrow a short vertical line rather than a diagonal",
+    );
   });
 
-  it("is shorter than ranking the same graph into columns would be", () => {
-    const laid = layoutOf([...spine, ...satellites], wiring);
-    let stacked = 0;
-    for (const seat of satellites) {
-      stacked = stacked + heightOf(seat);
-    }
-    assert.ok(
-      laid.height < stacked * 2,
-      `height ${String(laid.height)} should not approach a wall of ${String(stacked)}`,
-    );
+  it("keeps the shelf a couple of rows deep however many models there are", () => {
+    const seven = shelfRows(world(7).nodes);
+    assert.ok(seven <= 2, `seven models spread over ${String(seven)} rows`);
+    const fifteen = shelfRows(world(15).nodes);
+    assert.ok(fifteen <= 4, `fifteen models spread over ${String(fifteen)} rows`);
+    assert.ok(fifteen < 15, "a shelf that grows a row per model is the wall wearing a hat");
   });
 });

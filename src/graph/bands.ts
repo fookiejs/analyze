@@ -93,6 +93,20 @@ function referrersOf(edges: readonly GraphEdge[], id: string): readonly string[]
   return found;
 }
 
+function undoneBy(edges: readonly GraphEdge[], id: string): readonly string[] {
+  let found: readonly string[] = [];
+  for (const edge of edges) {
+    if (edge.kind !== "compensates") {
+      continue;
+    }
+    if (edge.to !== id) {
+      continue;
+    }
+    found = appendItem(found, edge.from);
+  }
+  return found;
+}
+
 export function columnAssignment(
   nodes: readonly GraphNode[],
   edges: readonly GraphEdge[],
@@ -101,6 +115,14 @@ export function columnAssignment(
 ): readonly LayerOf[] {
   let columns: readonly LayerOf[] = [];
   for (const node of nodes) {
+    if (bandFor(bands, node.id) === undoBand) {
+      let under = layerFor(layers, node.id);
+      for (const forward of undoneBy(edges, node.id)) {
+        under = layerFor(layers, forward);
+      }
+      columns = appendItem(columns, { id: node.id, layer: under });
+      continue;
+    }
     if (bandFor(bands, node.id) !== dataBand) {
       columns = appendItem(columns, { id: node.id, layer: layerFor(layers, node.id) });
       continue;
