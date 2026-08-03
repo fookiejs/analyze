@@ -16,7 +16,7 @@ function node(id: string): GraphNode {
 }
 
 function edge(from: string, to: string): GraphEdge {
-  return { from, to, kind: "relation", label: "", weight: 1 };
+  return { from, to, kind: "relation", label: "", weight: 1, step: 0 };
 }
 
 describe("layered layout", () => {
@@ -171,7 +171,7 @@ describe("application map", () => {
     for (const relation of relations) {
       assert.equal(relation.from, modelNodeId("Order"));
       assert.equal(relation.to, modelNodeId("User"));
-      assert.equal(relation.label, "buyer");
+      assert.equal(relation.label, "buyer →", "the edge says which column carries the link");
     }
   });
 
@@ -183,15 +183,21 @@ describe("application map", () => {
 
   it("counts observed model to external calls from the outbox", () => {
     const rows = [
-      { model: "Order", name: "pay.charge" },
-      { model: "Order", name: "pay.charge" },
-      { model: "User", name: "pay.charge" },
+      { model: "Order", name: "pay.charge", runId: "run-1", stepIndex: 1 },
+      { model: "Order", name: "pay.charge", runId: "run-1", stepIndex: 1 },
+      { model: "User", name: "pay.charge", runId: "run-2", stepIndex: 0 },
     ] as unknown as readonly OutboxEntry[];
-    const edges = observedExternalEdges(rows);
+    const runs = [
+      { runId: "run-1", operation: "create" },
+      { runId: "run-2", operation: "update" },
+    ];
+    const edges = observedExternalEdges(rows, runs);
     assert.equal(edges.length, 2, "two distinct caller pairs");
-    const heavy = edges.filter((entry) => entry.from === modelNodeId("Order"));
-    for (const entry of heavy) {
-      assert.equal(entry.weight, 2, "the repeated call is counted, not duplicated");
+    const heavy = edges.filter((call) => call.from === modelNodeId("Order"));
+    for (const call of heavy) {
+      assert.equal(call.weight, 2, "the repeated call is counted, not duplicated");
+      assert.equal(call.label, "create step 2", "the edge names the flow and the step");
+      assert.equal(call.step, 2);
     }
   });
 
@@ -225,10 +231,24 @@ describe("cyclic graphs", () => {
       { id: "external:pay", label: "pay", kind: "external" },
     ];
     const edges = [
-      { from: "model:Order", to: "model:Customer", kind: "relation", label: "", weight: 1 },
-      { from: "model:OrderLog", to: "model:Order", kind: "relation", label: "", weight: 1 },
-      { from: "model:Order", to: "model:OrderLog", kind: "nests", label: "", weight: 1 },
-      { from: "model:Order", to: "external:pay", kind: "invokes", label: "", weight: 1 },
+      {
+        from: "model:Order",
+        to: "model:Customer",
+        kind: "relation",
+        label: "",
+        weight: 1,
+        step: 0,
+      },
+      {
+        from: "model:OrderLog",
+        to: "model:Order",
+        kind: "relation",
+        label: "",
+        weight: 1,
+        step: 0,
+      },
+      { from: "model:Order", to: "model:OrderLog", kind: "nests", label: "", weight: 1, step: 0 },
+      { from: "model:Order", to: "external:pay", kind: "invokes", label: "", weight: 1, step: 1 },
     ];
 
     const layout = layoutOf(nodes, edges);
@@ -250,8 +270,8 @@ describe("cyclic graphs", () => {
       { id: "c", label: "c", kind: "model" },
     ];
     const edges = [
-      { from: "a", to: "b", kind: "invokes", label: "", weight: 1 },
-      { from: "b", to: "c", kind: "invokes", label: "", weight: 1 },
+      { from: "a", to: "b", kind: "invokes", label: "", weight: 1, step: 1 },
+      { from: "b", to: "c", kind: "invokes", label: "", weight: 1, step: 2 },
     ];
     const layout = layoutOf(nodes, edges);
     const byId = new Map(layout.nodes.map((node) => [node.id, node]));

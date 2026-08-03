@@ -61,6 +61,16 @@ function edgePath(from, to) {
     " C " + (x1 + back) + " " + (y1 + lift) + ", " + (x2 - back) + " " + (y2 + lift) + ", " + x2 + " " + y2;
 }
 
+function edgeMidpoint(from, to) {
+  const x1 = from.x + from.width;
+  const y1 = from.y + from.height / 2;
+  const x2 = to.x;
+  const y2 = to.y + to.height / 2;
+  if (x2 >= x1) { return { x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 7 }; }
+  const lift = y1 <= y2 ? -34 : 34;
+  return { x: (x1 + x2) / 2, y: (y1 + y2) / 2 + lift };
+}
+
 function nodesById() {
   const index = {};
   for (const node of state.graph.nodes) { index[node.id] = node; }
@@ -112,6 +122,10 @@ function drawMap() {
       "marker-end": "url(#arrow-" + edge.kind + ")",
       d: edgePath(from, to),
     }));
+    const mid = edgeMidpoint(from, to);
+    let labelCls = "edge-label";
+    if (state.selectedNode) { labelCls = labelCls + (touchesSelection(edge) ? " lit" : " faded"); }
+    group.appendChild(svgEl("text", { class: labelCls, x: mid.x, y: mid.y }, edge.label));
   }
 
   for (const node of state.graph.nodes) {
@@ -261,6 +275,18 @@ function inspectModel(panel, name) {
   kv.appendChild(el("div", {}, String(runCountFor(name))));
   panel.appendChild(kv);
 
+  const flows = flowsFor(name);
+  if (flows.length > 0) {
+    panel.appendChild(el("h3", {}, "What each flow calls"));
+    for (const flow of flows) {
+      const line = el("div", { style: "margin-bottom:6px" });
+      line.appendChild(badge(flow.operation, "info"));
+      const steps = el("div", { class: "dim", style: "margin-top:3px" }, flow.steps.join("  →  "));
+      line.appendChild(steps);
+      panel.appendChild(line);
+    }
+  }
+
   panel.appendChild(el("h3", {}, "Fields"));
   const host = el("div", {});
   tableOf(host, ["Field", "Type", ""], model.fields, (field) => {
@@ -306,6 +332,43 @@ function inspectExternal(panel, name) {
   if (keys.length === 0) { traffic.appendChild(el("span", { class: "dim" }, "No calls recorded yet.")); }
   for (const key of keys) { traffic.appendChild(badge(key + " " + counts[key], toneForStatus(key))); }
   panel.appendChild(traffic);
+}
+
+function operationForRun(runId) {
+  for (const run of state.runs) { if (run.runId === runId) { return run.operation; } }
+  for (const span of state.obs.spans) { if (span.traceId === runId && span.name.indexOf(".") > 0) { return span.operation; } }
+  return "";
+}
+
+function operationForCall(model, externalName) {
+  for (const span of state.obs.spans) {
+    const attributes = span.attributes || {};
+    if (attributes.externalName !== externalName) { continue; }
+    if (span.model !== model) { continue; }
+    if (span.operation) { return span.operation; }
+  }
+  return "flow";
+}
+
+function flowsFor(model) {
+  const index = {};
+  const order = [];
+  for (const row of state.outbox) {
+    if (row.model !== model) { continue; }
+    if (row.compensationOf && row.compensationOf.length > 0) { continue; }
+    const operation = operationForRun(row.runId) || operationForCall(model, row.name);
+    if (!index[operation]) { index[operation] = {}; order.push(operation); }
+    const at = row.stepIndex;
+    if (index[operation][at] === undefined) { index[operation][at] = row.name; }
+  }
+  const built = [];
+  for (const operation of order) {
+    const steps = [];
+    const keys = Object.keys(index[operation]).toSorted((a, b) => Number(a) - Number(b));
+    for (const key of keys) { steps.push(index[operation][key]); }
+    built.push({ operation: operation, steps: steps });
+  }
+  return built;
 }
 
 function runCountFor(model) {

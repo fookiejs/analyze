@@ -89,10 +89,10 @@ function mapViewHtml(): string {
   return `<section id="view-map" class="canvas-wrap">
 <div id="map-canvas"></div>
 <div class="map-legend">
-<div class="row"><span class="swatch rel"></span>relation (declared)</div>
-<div class="row"><span class="swatch inv"></span>invokes (observed)</div>
-<div class="row"><span class="swatch comp"></span>compensates</div>
-<div class="row"><span class="swatch nest"></span>nests (observed)</div>
+<div class="row"><span class="swatch rel"></span><span><b>declared relation.</b> The arrow starts at the model that stores the column and points at the model it refers to.</span></div>
+<div class="row"><span class="swatch inv"></span><span><b>observed call.</b> That flow really called that external, and the label says in which step.</span></div>
+<div class="row"><span class="swatch comp"></span><span><b>compensation.</b> If the saga rolls back, the first external is undone by the second.</span></div>
+<div class="row"><span class="swatch nest"></span><span><b>observed nesting.</b> The first model started an operation on the second inside its own flow.</span></div>
 </div>
 <div class="map-controls">
 <span class="dim" style="padding:4px 8px;font-size:11px">drag to pan &middot; scroll to zoom &middot; click a node</span>

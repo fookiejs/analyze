@@ -14,6 +14,7 @@ export type GraphEdge = {
   kind: string;
   label: string;
   weight: number;
+  step: number;
 };
 
 export type LayerOf = {
@@ -221,16 +222,33 @@ function incomingCount(edges: readonly GraphEdge[], id: string): number {
   return total;
 }
 
+function earliestStep(edges: readonly GraphEdge[], id: string): number {
+  let earliest = 0;
+  for (const edge of edges) {
+    if (edge.to !== id) {
+      continue;
+    }
+    if (edge.step < 1) {
+      continue;
+    }
+    if (earliest === 0 || edge.step < earliest) {
+      earliest = edge.step;
+    }
+  }
+  return earliest === 0 ? 999 : earliest;
+}
+
 function orderKeyOf(edges: readonly GraphEdge[], node: GraphNode): string {
   if (z.string().min(1).safeParse(node.id).success === false) {
     throw AnalyzeError.create("graph node id required");
   }
+  const step = String(earliestStep(edges, node.id)).padStart(4, "0");
   const incoming = incomingCount(edges, node.id);
   const padded = String(1000 - incoming).padStart(4, "0");
   if (padded.length < 4) {
     throw AnalyzeError.create("order key must sort lexically");
   }
-  return `${padded}:${node.label}`;
+  return `${step}:${padded}:${node.label}`;
 }
 
 function columnOf(

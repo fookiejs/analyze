@@ -163,7 +163,10 @@ export function mapCss(): string {
   background: color-mix(in srgb, var(--card) 88%, transparent);
   backdrop-filter: blur(8px); font-size: 11px; color: var(--muted-foreground);
 }
-.map-legend .row { display: flex; align-items: center; gap: 7px; }
+.map-legend { max-width: 320px; }
+.map-legend .row { display: flex; align-items: flex-start; gap: 7px; line-height: 1.45; }
+.map-legend .swatch { margin-top: 7px; flex: 0 0 18px; }
+.map-legend b { color: var(--foreground); font-weight: 500; }
 .map-legend .swatch { width: 18px; height: 0; border-top: 2px solid var(--muted-foreground); }
 .map-legend .swatch.rel { border-top-style: dashed; border-top-color: var(--violet); }
 .map-legend .swatch.inv { border-top-color: var(--info); }
@@ -188,6 +191,13 @@ export function mapCss(): string {
 .edge.compensates { stroke: var(--warning); stroke-dasharray: 2 3; }
 .edge.nests { stroke: var(--success); }
 .edge.faded { opacity: 0.1; }
+.edge-label {
+  fill: var(--muted-foreground); font-size: 10.5px; font-weight: 500;
+  paint-order: stroke; stroke: var(--background); stroke-width: 5px; stroke-linejoin: round;
+  pointer-events: none; text-anchor: middle;
+}
+.edge-label.faded { opacity: 0.12; }
+.edge-label.lit { fill: var(--foreground); }
 .edge.lit { opacity: 1; stroke-width: 2; }
 
 .inspector {
