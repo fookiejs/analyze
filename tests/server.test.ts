@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { AnalyzeServer, defaultOptions } from "../src/server.ts";
 import { clientJs, indexHtml, stylesCss } from "../src/ui/page.ts";
 import { queryNumber } from "../src/transport.ts";
+import { layoutOf } from "../src/graph/layout.ts";
 import type { AnalyzeSource } from "../src/source.ts";
 import type {
   ExternalSummary,
@@ -440,5 +441,99 @@ describe("showing why something failed", () => {
     for (const selector of [".detail", ".json", ".reason", ".log-line", ".step.openable"]) {
       assert.ok(css.includes(selector), `${selector} needs styling`);
     }
+  });
+});
+
+describe("the map lays a saga out as a staircase", () => {
+  it("pushes each successive step one column further right", () => {
+    const nodes = [
+      { id: "model:Order", label: "Order", kind: "model", subtitle: "", ports: [], fields: [] },
+      { id: "external:one", label: "one", kind: "external", subtitle: "", ports: [], fields: [] },
+      { id: "external:two", label: "two", kind: "external", subtitle: "", ports: [], fields: [] },
+      {
+        id: "external:three",
+        label: "three",
+        kind: "external",
+        subtitle: "",
+        ports: [],
+        fields: [],
+      },
+    ];
+    const call = (to: string, step: number) => ({
+      from: "model:Order",
+      fromPort: "create",
+      to,
+      toPort: "in",
+      kind: "invokes",
+      label: String(step),
+      weight: 1,
+      step,
+      plane: "flow",
+    });
+    const layout = layoutOf(nodes, [
+      call("external:one", 1),
+      call("external:two", 2),
+      call("external:three", 3),
+    ]);
+    const columnOf = (id: string) => layout.nodes.filter((node) => node.id === id)[0]?.layer;
+    assert.equal(columnOf("model:Order"), 0);
+    assert.equal(columnOf("external:one"), 1, "the first call sits one column across");
+    assert.equal(columnOf("external:two"), 2, "the second sits two");
+    assert.equal(columnOf("external:three"), 3, "and the third sits three");
+  });
+
+  it("lets relations be drawn without dragging a model into a flow column", () => {
+    const nodes = [
+      { id: "model:Order", label: "Order", kind: "model", subtitle: "", ports: [], fields: [] },
+      {
+        id: "model:Customer",
+        label: "Customer",
+        kind: "model",
+        subtitle: "",
+        ports: [],
+        fields: [],
+      },
+      { id: "external:pay", label: "pay", kind: "external", subtitle: "", ports: [], fields: [] },
+    ];
+    const layout = layoutOf(nodes, [
+      {
+        from: "model:Order",
+        fromPort: "card",
+        to: "model:Customer",
+        toPort: "card",
+        kind: "relation",
+        label: "buyer",
+        weight: 1,
+        step: 0,
+        plane: "data",
+      },
+      {
+        from: "model:Order",
+        fromPort: "create",
+        to: "external:pay",
+        toPort: "in",
+        kind: "invokes",
+        label: "1",
+        weight: 1,
+        step: 1,
+        plane: "flow",
+      },
+    ]);
+    const columnOf = (id: string) => layout.nodes.filter((node) => node.id === id)[0]?.layer;
+    assert.equal(columnOf("model:Customer"), 0, "a relation is an edge, not a rank");
+    assert.equal(columnOf("external:pay"), 1);
+  });
+
+  it("shows a model's own logs, metrics and operations when its card is opened", () => {
+    const js = clientJs();
+    for (const symbol of [
+      "logsForModel",
+      "metricsForModel",
+      "operationsForModel",
+      "modelActivity",
+    ]) {
+      assert.ok(js.includes(symbol), `${symbol} must reach the browser`);
+    }
+    assert.ok(js.includes("Recent operations"), "the card links out to the runs it took part in");
   });
 });

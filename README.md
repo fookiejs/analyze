@@ -159,6 +159,20 @@ The rail names what it is waiting on right now, if anything.
 A real run reads as a sentence: reserve completed, charge dead lettered, release completed. That is a
 saga that paid for nothing and correctly gave the stock back.
 
+## The map reads left to right
+
+A saga is a sequence, so the map draws it as one. Each successive step sits **one column further right**
+than the step before it, and a compensation sits one column after the step it undoes. A five step order
+flow spreads across five columns instead of stacking in a single pile, which is the difference between
+seeing a shape and squinting at a list.
+
+Position comes from the flow graph alone. Relations are drawn, but they do not rank anything, so the
+models nothing creates gather in the leftmost column — read them as the roots of your data model — and
+the saga marches away from them.
+
+There is one card per model however many arrows reach it. A flow that writes two log rows produces one
+edge of weight two, not two cards.
+
 ## One model at a time
 
 Every model has its own lifecycle, and reading twenty of them at once is a different question from
@@ -170,7 +184,9 @@ A model card carries the four flows whether or not anything was ever observed on
 calls nothing" is a fact worth seeing rather than an absence to infer. Edges leave a flow row and land
 on the row they reach, so an arrow says which flow does what, not merely that two things are related.
 
-Clicking a flow lights every edge reachable from it and dims the rest.
+Clicking a flow lights every edge reachable from it and dims the rest. Opening a card shows that
+model's own activity: the metrics counted against it, the recent operations it took part in, and the
+lines it logged — each linking to the request that produced them.
 
 Mouse behaviour follows a CAD editor rather than a web page: **middle button drags the canvas, left
 click always selects**, and the wheel zooms at the cursor. `f` or the Fit button frames everything.

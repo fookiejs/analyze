@@ -355,6 +355,13 @@ export function mapCss(): string {
 
 .step.openable { cursor: pointer; border-radius: 6px; }
 .step.openable:hover { background: var(--card-hover); }
+
+.meter {
+  display: flex; align-items: baseline; gap: 8px; padding: 4px 0;
+  border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.meter:last-of-type { border-bottom: 0; }
+.meter-value { margin-left: auto; }
 `.trim();
 }
 

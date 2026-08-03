@@ -232,6 +232,21 @@ export function acyclicEdges(
   return forward;
 }
 
+export const maxStride = 8;
+
+export function strideOf(edge: GraphEdge): number {
+  if (Number.isInteger(edge.step) === false) {
+    return 1;
+  }
+  if (edge.step < 1) {
+    return 1;
+  }
+  if (edge.step > maxStride) {
+    return maxStride;
+  }
+  return edge.step;
+}
+
 function relaxOnce(layers: readonly LayerOf[], edges: readonly GraphEdge[]): readonly LayerOf[] {
   let next: readonly LayerOf[] = [];
   for (const entry of layers) {
@@ -240,7 +255,7 @@ function relaxOnce(layers: readonly LayerOf[], edges: readonly GraphEdge[]): rea
       if (edge.to !== entry.id) {
         continue;
       }
-      const candidate = layerFor(layers, edge.from) + 1;
+      const candidate = layerFor(layers, edge.from) + strideOf(edge);
       if (candidate > deepest) {
         deepest = candidate;
       }
@@ -262,12 +277,26 @@ function sameLayers(left: readonly LayerOf[], right: readonly LayerOf[]): boolea
   return true;
 }
 
+function rankingEdges(edges: readonly GraphEdge[]): readonly GraphEdge[] {
+  let flowing: readonly GraphEdge[] = [];
+  for (const edge of edges) {
+    if (edge.plane !== flowPlane) {
+      continue;
+    }
+    flowing = appendItem(flowing, edge);
+  }
+  if (flowing.length < 1) {
+    return edges;
+  }
+  return flowing;
+}
+
 export function layerAssignment(
   nodes: readonly GraphNode[],
   edges: readonly GraphEdge[],
 ): readonly LayerOf[] {
   const ids = idsOf(nodes);
-  const forward = acyclicEdges(ids, keptEdges(edges, ids));
+  const forward = acyclicEdges(ids, rankingEdges(keptEdges(edges, ids)));
   let layers: readonly LayerOf[] = [];
   for (const id of ids) {
     layers = appendItem(layers, { id, layer: 0 });

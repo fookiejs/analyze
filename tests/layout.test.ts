@@ -369,7 +369,7 @@ describe("cyclic graphs", () => {
         kind: "invokes",
         label: "",
         weight: 1,
-        step: 2,
+        step: 1,
         plane: "flow",
       },
     ];
@@ -377,7 +377,7 @@ describe("cyclic graphs", () => {
     const byId = new Map(layout.nodes.map((node) => [node.id, node]));
     assert.equal(byId.get("a")?.layer, 0);
     assert.equal(byId.get("b")?.layer, 1);
-    assert.equal(byId.get("c")?.layer, 2);
+    assert.equal(byId.get("c")?.layer, 2, "one hop per edge when every edge is step one");
   });
 });
 

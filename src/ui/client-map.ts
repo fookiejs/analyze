@@ -393,6 +393,82 @@ function setPlane(plane) {
   renderInspector();
 }
 
+function logsForModel(name, keep) {
+  const found = [];
+  for (const entry of state.obs.logs) {
+    if (entry.model !== name) { continue; }
+    found.push(entry);
+  }
+  return found.toReversed().slice(0, keep);
+}
+
+function metricsForModel(name) {
+  const totals = {};
+  const order = [];
+  for (const entry of state.obs.metrics) {
+    if (entry.model !== name) { continue; }
+    if (totals[entry.name] === undefined) { totals[entry.name] = 0; order.push(entry.name); }
+    totals[entry.name] = totals[entry.name] + entry.value;
+  }
+  const built = [];
+  for (const key of order) { built.push({ name: key, value: totals[key] }); }
+  return built;
+}
+
+function operationsForModel(name, keep) {
+  const seen = [];
+  const known = {};
+  for (const span of state.obs.spans.toReversed()) {
+    if (span.model !== name) { continue; }
+    if (isOperationSpan(span) === false) { continue; }
+    if (known[span.traceId]) { continue; }
+    known[span.traceId] = true;
+    seen.push(span);
+    if (seen.length >= keep) { return seen; }
+  }
+  return seen;
+}
+
+function modelActivity(panel, name) {
+  const counters = metricsForModel(name);
+  panel.appendChild(el("h3", {}, "Metrics"));
+  if (counters.length === 0) {
+    panel.appendChild(el("div", { class: "dim" }, "Nothing counted yet."));
+  }
+  for (const counter of counters) {
+    const row = el("div", { class: "meter" });
+    row.appendChild(el("span", {}, counter.name));
+    row.appendChild(el("span", { class: "meter-value mono" }, String(counter.value)));
+    panel.appendChild(row);
+  }
+
+  const runs = operationsForModel(name, 8);
+  panel.appendChild(el("h3", {}, "Recent operations"));
+  if (runs.length === 0) {
+    panel.appendChild(el("div", { class: "dim" }, "No operation recorded on this model yet."));
+  }
+  for (const span of runs) {
+    const row = el("div", { class: "meter" });
+    row.appendChild(el("span", {}, span.name));
+    row.appendChild(el("span", { class: "meter-value mono dim" }, duration(ms(span.startedAt, span.endedAt))));
+    row.appendChild(runLink(span.traceId));
+    panel.appendChild(row);
+  }
+
+  const lines = logsForModel(name, 8);
+  panel.appendChild(el("h3", {}, "Recent logs"));
+  if (lines.length === 0) {
+    panel.appendChild(el("div", { class: "dim" }, "This model has logged nothing in the buffer."));
+  }
+  for (const entry of lines) {
+    const row = el("div", { class: "log-line" });
+    row.appendChild(badge(entry.level, toneForLevel(entry.level)));
+    row.appendChild(el("span", {}, entry.message));
+    row.appendChild(runLink(entry.traceId));
+    panel.appendChild(row);
+  }
+}
+
 function renderInspector() {
   const panel = byId("inspector");
   if (!state.selectedNode) { panel.classList.remove("on"); clear(panel); return; }
@@ -429,6 +505,8 @@ function inspectModel(panel, node, port) {
     row.addEventListener("click", () => selectPort(node.id + "#" + flow.id));
     panel.appendChild(row);
   }
+
+  modelActivity(panel, node.label);
 
   panel.appendChild(el("h3", {}, "Fields"));
   const host = el("div", {});
