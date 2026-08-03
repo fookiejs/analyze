@@ -1,6 +1,25 @@
 export { AnalyzeError } from "./errors.ts";
-export { layerAssignment, layerFor, layoutOf, nodeHeight, nodeWidth } from "./graph/layout.ts";
-export type { GraphEdge, GraphNode, Layout, LayerOf, PlacedNode } from "./graph/layout.ts";
+export {
+  cardHeaderHeight,
+  dataPlane,
+  flowPlane,
+  heightOf,
+  layerAssignment,
+  layerFor,
+  layoutOf,
+  nodeWidth,
+  portAnchorY,
+  portIndexOf,
+  portRowHeight,
+} from "./graph/layout.ts";
+export type {
+  GraphEdge,
+  GraphNode,
+  GraphPort,
+  Layout,
+  LayerOf,
+  PlacedNode,
+} from "./graph/layout.ts";
 export {
   compensatesEdgeKind,
   declaredEdges,
@@ -8,6 +27,8 @@ export {
   invokesEdgeKind,
   modelNodeId,
   nestsEdgeKind,
+  flowOperations,
+  flowUsesFrom,
   nodesOf,
   observedExternalEdges,
   observedNestingEdges,

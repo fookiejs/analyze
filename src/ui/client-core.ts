@@ -1,6 +1,26 @@
 export function clientCoreJs(): string {
   return `
-const token = new URLSearchParams(location.search).get("token") || "";
+const TOKEN_KEY = "fookie-analyze-token";
+
+function rememberToken(value) {
+  try { sessionStorage.setItem(TOKEN_KEY, value); } catch (err) { void err; }
+}
+
+function forgetToken() {
+  try { sessionStorage.removeItem(TOKEN_KEY); } catch (err) { void err; }
+}
+
+function resolveToken() {
+  const fromUrl = new URLSearchParams(location.search).get("token");
+  if (fromUrl) {
+    rememberToken(fromUrl);
+    history.replaceState({}, "", location.pathname);
+    return fromUrl;
+  }
+  try { return sessionStorage.getItem(TOKEN_KEY) || ""; } catch (err) { void err; return ""; }
+}
+
+let token = resolveToken();
 const headers = token ? { "x-analyze-token": token } : {};
 const NS = "http://www.w3.org/2000/svg";
 
@@ -13,16 +33,31 @@ const state = {
   outbox: [],
   obs: { logs: [], metrics: [], spans: [], nextSeq: 0, oldestSeq: 0 },
   selectedNode: "",
+  selectedPort: "",
   selectedModel: "",
+  plane: "flow",
   openTraces: {},
   filter: "",
   camera: { x: 40, y: 40, k: 1, ready: false },
 };
 
 async function load(path) {
-  const res = await fetch(path, { headers });
+  const res = await fetch(path, { headers: { "x-analyze-token": token } });
+  if (res.status === 401) {
+    forgetToken();
+    askForToken();
+    throw new Error("this dashboard needs its access token");
+  }
   if (!res.ok) { throw new Error(path + " answered " + res.status); }
   return await res.json();
+}
+
+function askForToken() {
+  const gate = byId("gate");
+  if (!gate) { return; }
+  gate.classList.add("on");
+  const input = byId("gate-input");
+  if (input) { input.focus(); }
 }
 
 function el(tag, attrs, text) {

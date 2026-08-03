@@ -154,6 +154,22 @@ describe("analyze server", () => {
     await res.text();
   });
 
+  it("serves the shell without a token so the sign in screen can render", async () => {
+    const res = await fetch(`${base}/`);
+    assert.equal(res.status, 200, "the page itself carries no data");
+    const body = await res.text();
+    assert.match(body, /id="gate-form"/, "an unauthenticated visitor gets somewhere to paste it");
+    assert.equal(body.includes(token), false, "the shell must never leak the token");
+  });
+
+  it("keeps every data endpoint locked while the shell is open", async () => {
+    for (const path of ["/api/catalog", "/api/graph", "/api/runs", "/api/outbox", "/api/obs"]) {
+      const res = await fetch(`${base}${path}`);
+      assert.equal(res.status, 401, `${path} must stay behind the token`);
+      await res.text();
+    }
+  });
+
   it("refuses a wrong token", async () => {
     const res = await fetch(`${base}/api/health`, {
       headers: { "x-analyze-token": "x".repeat(token.length) },

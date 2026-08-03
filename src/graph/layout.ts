@@ -2,19 +2,31 @@ import { z } from "zod";
 import { appendItem } from "@fookiejs/core";
 import { AnalyzeError } from "../errors.ts";
 
+export type GraphPort = {
+  id: string;
+  label: string;
+  detail: string;
+  active: boolean;
+};
+
 export type GraphNode = {
   id: string;
   label: string;
   kind: string;
+  subtitle: string;
+  ports: readonly GraphPort[];
 };
 
 export type GraphEdge = {
   from: string;
+  fromPort: string;
   to: string;
+  toPort: string;
   kind: string;
   label: string;
   weight: number;
   step: number;
+  plane: string;
 };
 
 export type LayerOf = {
@@ -37,10 +49,56 @@ export type Layout = {
   height: number;
 };
 
-export const nodeWidth = 208;
-export const nodeHeight = 64;
-export const columnGap = 132;
-export const rowGap = 28;
+export const nodeWidth = 236;
+export const cardHeaderHeight = 46;
+export const portRowHeight = 26;
+export const cardFooterHeight = 10;
+export const plainNodeHeight = 58;
+export const columnGap = 150;
+export const rowGap = 30;
+
+export const flowPlane = "flow";
+export const dataPlane = "data";
+
+export function heightOf(node: GraphNode): number {
+  if (Array.isArray(node.ports) === false) {
+    throw AnalyzeError.create("graph node ports required");
+  }
+  if (node.ports.length < 1) {
+    return plainNodeHeight;
+  }
+  const height = cardHeaderHeight + node.ports.length * portRowHeight + cardFooterHeight;
+  if (height < cardHeaderHeight) {
+    throw AnalyzeError.create("a card is at least its header tall");
+  }
+  return height;
+}
+
+export function portIndexOf(node: GraphNode, portId: string): number {
+  let index = 0;
+  for (const port of node.ports) {
+    if (port.id === portId) {
+      return index;
+    }
+    index = index + 1;
+  }
+  return -1;
+}
+
+export function portAnchorY(node: PlacedNode, portId: string): number {
+  if (z.string().min(1).safeParse(portId).success === false) {
+    return node.y + node.height / 2;
+  }
+  const index = portIndexOf(node, portId);
+  if (index < 0) {
+    return node.y + node.height / 2;
+  }
+  const anchor = node.y + cardHeaderHeight + index * portRowHeight + portRowHeight / 2;
+  if (anchor < node.y) {
+    throw AnalyzeError.create("a port anchor sits inside its card");
+  }
+  return anchor;
+}
 
 function idsOf(nodes: readonly GraphNode[]): readonly string[] {
   let ids: readonly string[] = [];
@@ -287,29 +345,68 @@ export function layoutOf(nodes: readonly GraphNode[], edges: readonly GraphEdge[
   let placed: readonly PlacedNode[] = [];
   let tallest = 0;
   for (let column = 0; column <= deepest; column += 1) {
-    let row = 0;
-    for (const placedNode of columnOf(nodes, layers, column, usable)) {
+    let cursor = 0;
+    for (const seat of columnOf(nodes, layers, column, usable)) {
+      const height = heightOf(seat);
       placed = appendItem(placed, {
-        id: placedNode.id,
-        label: placedNode.label,
-        kind: placedNode.kind,
+        id: seat.id,
+        label: seat.label,
+        kind: seat.kind,
+        subtitle: seat.subtitle,
+        ports: seat.ports,
         layer: column,
         x: column * (nodeWidth + columnGap),
-        y: row * (nodeHeight + rowGap),
+        y: cursor,
         width: nodeWidth,
-        height: nodeHeight,
+        height,
       });
-      row += 1;
+      cursor = cursor + height + rowGap;
     }
-    if (row > tallest) {
-      tallest = row;
+    const used = cursor > 0 ? cursor - rowGap : 0;
+    if (used > tallest) {
+      tallest = used;
     }
   }
 
+  const centred = centreColumns(placed, tallest);
   return {
-    nodes: placed,
+    nodes: centred,
     edges: usable,
     width: (deepest + 1) * nodeWidth + deepest * columnGap,
-    height: Math.max(tallest, 1) * nodeHeight + Math.max(tallest - 1, 0) * rowGap,
+    height: Math.max(tallest, 1),
   };
+}
+
+function columnHeight(nodes: readonly PlacedNode[], column: number): number {
+  let lowest = 0;
+  for (const placed of nodes) {
+    if (placed.layer !== column) {
+      continue;
+    }
+    if (placed.y + placed.height > lowest) {
+      lowest = placed.y + placed.height;
+    }
+  }
+  return lowest;
+}
+
+function centreColumns(nodes: readonly PlacedNode[], tallest: number): readonly PlacedNode[] {
+  let centred: readonly PlacedNode[] = [];
+  for (const node of nodes) {
+    const used = columnHeight(nodes, node.layer);
+    const shift = Math.max((tallest - used) / 2, 0);
+    centred = appendItem(centred, {
+      id: node.id,
+      label: node.label,
+      kind: node.kind,
+      subtitle: node.subtitle,
+      ports: node.ports,
+      layer: node.layer,
+      x: node.x,
+      y: node.y + shift,
+      width: node.width,
+      height: node.height,
+    });
+  }
+  return centred;
 }

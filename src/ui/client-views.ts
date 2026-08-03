@@ -520,16 +520,19 @@ function wire() {
     zoomAt(box.left + box.width / 2, box.top + box.height / 2, 1 / 1.2);
   });
   byId("zoom-fit").addEventListener("click", fitMap);
+  for (const button of document.querySelectorAll("#plane-switch button")) {
+    button.addEventListener("click", () => setPlane(button.dataset.plane));
+  }
   byId("runs-filter").addEventListener("input", (event) => {
     state.filter = event.target.value;
     renderRuns();
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") { selectNode(""); }
+    if (event.key === "Escape") { selectPort(""); }
     if (event.key === "f" && state.view === "map" && event.target === document.body) { fitMap(); }
   });
   window.addEventListener("resize", () => {
-    if (state.view === "map" && !state.selectedNode) { fitMap(); }
+    if (state.view === "map" && !state.selectedPort) { fitMap(); }
   });
 }
 
@@ -539,9 +542,23 @@ function markLive(on) {
   byId("pulse-text").textContent = on ? "live" : "disconnected";
 }
 
+function wireGate() {
+  const form = byId("gate-form");
+  if (!form) { return; }
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const input = byId("gate-input");
+    const offered = input ? input.value.trim() : "";
+    if (offered.length < 1) { return; }
+    rememberToken(offered);
+    location.replace(location.pathname);
+  });
+}
+
 wire();
+wireGate();
 show("map");
-refresh().catch(fail);
+if (token) { refresh().catch(fail); } else { askForToken(); }
 
 const stream = new EventSource("/api/stream" + (token ? "?token=" + encodeURIComponent(token) : ""));
 stream.addEventListener("open", () => markLive(true));

@@ -2,6 +2,8 @@ export function clientMapJs(): string {
   return `
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 2.6;
+const CARD_HEADER = 46;
+const PORT_ROW = 26;
 
 function viewport() { return byId("viewport"); }
 
@@ -34,7 +36,7 @@ function fitMap() {
   if (!svg || state.graph.nodes.length === 0) { return; }
   const box = svg.getBoundingClientRect();
   if (box.width < 80 || box.height < 80) { return; }
-  const pad = 56;
+  const pad = 64;
   const w = state.graph.width || 1;
   const h = state.graph.height || 1;
   const scale = Math.min((box.width - pad * 2) / w, (box.height - pad * 2) / h, MAX_ZOOM);
@@ -46,40 +48,109 @@ function fitMap() {
   applyCamera();
 }
 
-function edgePath(from, to) {
-  const x1 = from.x + from.width;
-  const y1 = from.y + from.height / 2;
-  const x2 = to.x;
-  const y2 = to.y + to.height / 2;
-  if (x2 >= x1) {
-    const mid = (x1 + x2) / 2;
-    return "M " + x1 + " " + y1 + " C " + mid + " " + y1 + ", " + mid + " " + y2 + ", " + x2 + " " + y2;
-  }
-  const back = Math.max(60, (x1 - x2) / 2);
-  const lift = y1 <= y2 ? -Math.max(46, back / 2) : Math.max(46, back / 2);
-  return "M " + x1 + " " + y1 +
-    " C " + (x1 + back) + " " + (y1 + lift) + ", " + (x2 - back) + " " + (y2 + lift) + ", " + x2 + " " + y2;
-}
-
-function edgeMidpoint(from, to) {
-  const x1 = from.x + from.width;
-  const y1 = from.y + from.height / 2;
-  const x2 = to.x;
-  const y2 = to.y + to.height / 2;
-  if (x2 >= x1) { return { x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 7 }; }
-  const lift = y1 <= y2 ? -34 : 34;
-  return { x: (x1 + x2) / 2, y: (y1 + y2) / 2 + lift };
-}
-
 function nodesById() {
   const index = {};
   for (const node of state.graph.nodes) { index[node.id] = node; }
   return index;
 }
 
-function touchesSelection(edge) {
-  if (!state.selectedNode) { return false; }
-  return edge.from === state.selectedNode || edge.to === state.selectedNode;
+function portIndex(node, portId) {
+  let at = 0;
+  for (const port of node.ports) {
+    if (port.id === portId) { return at; }
+    at = at + 1;
+  }
+  return -1;
+}
+
+function anchorY(node, portId) {
+  const at = portIndex(node, portId);
+  if (at < 0) { return node.y + node.height / 2; }
+  return node.y + CARD_HEADER + at * PORT_ROW + PORT_ROW / 2;
+}
+
+function edgePath(from, fromPort, to, toPort) {
+  const x1 = from.x + from.width;
+  const y1 = anchorY(from, fromPort);
+  const x2 = to.x;
+  const y2 = anchorY(to, toPort);
+  if (x2 >= x1) {
+    const reach = Math.max(40, (x2 - x1) * 0.55);
+    return "M " + x1 + " " + y1 + " C " + (x1 + reach) + " " + y1 + ", " + (x2 - reach) + " " + y2 + ", " + x2 + " " + y2;
+  }
+  const back = Math.max(70, (x1 - x2) / 2);
+  const lift = y1 <= y2 ? -Math.max(50, back / 2) : Math.max(50, back / 2);
+  return "M " + x1 + " " + y1 +
+    " C " + (x1 + back) + " " + (y1 + lift) + ", " + (x2 - back) + " " + (y2 + lift) + ", " + x2 + " " + y2;
+}
+
+function visibleEdges() {
+  const shown = [];
+  for (const edge of state.graph.edges) {
+    if (state.plane === "flow" && edge.plane !== "flow") { continue; }
+    if (state.plane === "data" && edge.plane !== "data") { continue; }
+    shown.push(edge);
+  }
+  return shown;
+}
+
+function portKey(nodeId, portId) { return nodeId + "#" + portId; }
+
+function edgeKey(edge) {
+  return edge.from + ">" + edge.fromPort + ">" + edge.to + ">" + edge.toPort;
+}
+
+function downstreamOf(nodeId, portId) {
+  const ports = {};
+  const edges = {};
+  let frontier = [portKey(nodeId, portId)];
+  ports[frontier[0]] = true;
+  let guard = 0;
+  while (frontier.length > 0 && guard < 64) {
+    guard = guard + 1;
+    const next = [];
+    for (const edge of visibleEdges()) {
+      if (frontier.indexOf(portKey(edge.from, edge.fromPort)) < 0) { continue; }
+      edges[edgeKey(edge)] = true;
+      const target = portKey(edge.to, edge.toPort);
+      if (ports[target]) { continue; }
+      ports[target] = true;
+      next.push(target);
+    }
+    frontier = next;
+  }
+  return { ports: ports, edges: edges };
+}
+
+function highlight() {
+  if (!state.selectedPort) { return null; }
+  const parts = state.selectedPort.split("#");
+  return downstreamOf(parts[0], parts.length > 1 ? parts[1] : "");
+}
+
+function edgeIsLit(trail, edge) {
+  if (!trail) { return false; }
+  return trail.edges[edgeKey(edge)] === true;
+}
+
+function nodeIsLit(trail, node) {
+  if (!trail) { return false; }
+  if (trail.ports[portKey(node.id, "")] === true) { return true; }
+  for (const port of node.ports) {
+    if (trail.ports[portKey(node.id, port.id)] === true) { return true; }
+  }
+  return false;
+}
+
+function markerDefs(defs) {
+  for (const kind of ["relation", "invokes", "compensates", "nests"]) {
+    const marker = svgEl("marker", {
+      id: "arrow-" + kind, viewBox: "0 0 10 10", refX: "8", refY: "5",
+      markerWidth: "5", markerHeight: "5", orient: "auto-start-reverse",
+    });
+    marker.appendChild(svgEl("path", { d: "M 0 1 L 9 5 L 0 9 z", class: "arrow " + kind }));
+    defs.appendChild(marker);
+  }
 }
 
 function drawMap() {
@@ -93,71 +164,101 @@ function drawMap() {
 
   const svg = svgEl("svg", { id: "map-svg" });
   const defs = svgEl("defs", {});
-  const dots = svgEl("pattern", { id: "dots", width: "22", height: "22", patternUnits: "userSpaceOnUse" });
+  const dots = svgEl("pattern", { id: "dots", width: "24", height: "24", patternUnits: "userSpaceOnUse" });
   dots.appendChild(svgEl("circle", { cx: "1", cy: "1", r: "1", class: "map-dots" }));
   defs.appendChild(dots);
-  for (const kind of ["relation", "invokes", "compensates", "nests"]) {
-    const marker = svgEl("marker", {
-      id: "arrow-" + kind, viewBox: "0 0 10 10", refX: "9", refY: "5",
-      markerWidth: "6", markerHeight: "6", orient: "auto-start-reverse",
-    });
-    marker.appendChild(svgEl("path", { d: "M 0 0 L 10 5 L 0 10 z", class: "edge " + kind, "stroke-width": "0", fill: "currentColor" }));
-    defs.appendChild(marker);
-  }
+  markerDefs(defs);
   svg.appendChild(defs);
   svg.appendChild(svgEl("rect", { x: "0", y: "0", width: "100%", height: "100%", fill: "url(#dots)" }));
 
   const group = svgEl("g", { id: "viewport" });
   const index = nodesById();
+  const trail = highlight();
 
-  for (const edge of state.graph.edges) {
+  for (const edge of visibleEdges()) {
     const from = index[edge.from];
     const to = index[edge.to];
     if (!from || !to) { continue; }
     let cls = "edge " + edge.kind;
-    if (state.selectedNode) { cls = cls + (touchesSelection(edge) ? " lit" : " faded"); }
+    if (trail) { cls = cls + (edgeIsLit(trail, edge) ? " lit" : " faded"); }
     group.appendChild(svgEl("path", {
       class: cls,
-      "stroke-width": String(Math.min(1.1 + Math.log(edge.weight + 1) * 0.6, 3.4)),
+      "stroke-width": String(Math.min(1.2 + Math.log(edge.weight + 1) * 0.5, 3)),
       "marker-end": "url(#arrow-" + edge.kind + ")",
-      d: edgePath(from, to),
+      d: edgePath(from, edge.fromPort, to, edge.toPort),
     }));
-    const mid = edgeMidpoint(from, to);
-    let labelCls = "edge-label";
-    if (state.selectedNode) { labelCls = labelCls + (touchesSelection(edge) ? " lit" : " faded"); }
-    group.appendChild(svgEl("text", { class: labelCls, x: mid.x, y: mid.y }, edge.label));
+    if (edge.label) {
+      const x = (from.x + from.width + to.x) / 2;
+      const y = (anchorY(from, edge.fromPort) + anchorY(to, edge.toPort)) / 2 - 7;
+      let labelCls = "edge-label";
+      if (trail) { labelCls = labelCls + (edgeIsLit(trail, edge) ? " lit" : " faded"); }
+      group.appendChild(svgEl("text", { class: labelCls, x: x, y: y }, edge.label));
+    }
   }
 
-  for (const node of state.graph.nodes) {
-    const selected = node.id === state.selectedNode ? " selected" : "";
-    const wrap = svgEl("g", { class: "node " + node.kind + selected, tabindex: "0" });
-    wrap.appendChild(svgEl("rect", { class: "body", x: node.x, y: node.y, width: node.width, height: node.height, rx: "10" }));
-    wrap.appendChild(svgEl("rect", { class: "stripe", x: node.x, y: node.y + 12, width: "3", height: node.height - 24, rx: "2" }));
-    wrap.appendChild(svgEl("text", { class: "label", x: node.x + 16, y: node.y + 27 }, node.label));
-    wrap.appendChild(svgEl("text", { class: "sub", x: node.x + 16, y: node.y + 45 }, subtitleFor(node)));
-    wrap.addEventListener("click", (event) => {
-      event.stopPropagation();
-      selectNode(node.id);
-    });
-    group.appendChild(wrap);
-  }
+  for (const node of state.graph.nodes) { group.appendChild(cardFor(node, trail)); }
 
   svg.appendChild(group);
-  svg.addEventListener("click", () => selectNode(""));
+  svg.addEventListener("click", () => selectPort(""));
   host.appendChild(svg);
   wireCamera(svg);
   if (!state.camera.ready) { fitMap(); } else { applyCamera(); }
 }
 
-function subtitleFor(node) {
-  if (node.kind === "model") {
-    const model = modelNamed(node.label);
-    if (model) { return model.fields.length + " fields"; }
-    return "model";
+function portRow(node, port, at, trail) {
+  const y = node.y + CARD_HEADER + at * PORT_ROW;
+  const mid = y + PORT_ROW / 2;
+  const key = portKey(node.id, port.id);
+  const lit = trail && trail.ports[key] === true ? " lit" : "";
+  const row = svgEl("g", { class: "port" + (port.active ? " active" : "") + lit });
+  row.appendChild(svgEl("rect", { class: "hit", x: node.x + 1, y: y, width: node.width - 2, height: PORT_ROW }));
+  row.appendChild(svgEl("text", { class: "port-label", x: node.x + 15, y: mid + 4 }, port.label));
+  if (port.detail) {
+    row.appendChild(svgEl("text", { class: "port-detail", x: node.x + node.width - 15, y: mid + 4 }, port.detail));
   }
-  const external = externalNamed(node.label);
-  if (external) { return external.attempts + " attempts, " + external.backoff; }
-  return "external";
+  if (port.active) {
+    row.appendChild(svgEl("circle", { class: "port-dot out", cx: node.x + node.width, cy: mid, r: "3.5" }));
+  }
+  row.appendChild(svgEl("circle", { class: "port-dot in", cx: node.x, cy: mid, r: "3.5" }));
+  row.addEventListener("click", (event) => {
+    event.stopPropagation();
+    selectPort(key);
+  });
+  return row;
+}
+
+function cardFor(node, trail) {
+  const dimmed = trail && !nodeIsLit(trail, node) ? " faded" : "";
+  const wrap = svgEl("g", { class: "node " + node.kind + dimmed });
+  wrap.appendChild(svgEl("rect", { class: "body", x: node.x, y: node.y, width: node.width, height: node.height, rx: "11" }));
+  wrap.appendChild(svgEl("path", { class: "cap", d: capPath(node) }));
+  wrap.appendChild(svgEl("text", { class: "label", x: node.x + 15, y: node.y + 21 }, node.label));
+  wrap.appendChild(svgEl("text", { class: "sub", x: node.x + 15, y: node.y + 36 }, node.subtitle));
+
+  let at = 0;
+  for (const port of node.ports) {
+    wrap.appendChild(portRow(node, port, at, trail));
+    at = at + 1;
+  }
+
+  wrap.addEventListener("click", (event) => {
+    event.stopPropagation();
+    selectPort(portKey(node.id, ""));
+  });
+  return wrap;
+}
+
+function capPath(node) {
+  const x = node.x;
+  const y = node.y;
+  const w = node.width;
+  const r = 11;
+  return "M " + x + " " + (y + CARD_HEADER) +
+    " L " + x + " " + (y + r) +
+    " Q " + x + " " + y + " " + (x + r) + " " + y +
+    " L " + (x + w - r) + " " + y +
+    " Q " + (x + w) + " " + y + " " + (x + w) + " " + (y + r) +
+    " L " + (x + w) + " " + (y + CARD_HEADER) + " Z";
 }
 
 function wireCamera(svg) {
@@ -201,20 +302,22 @@ function externalNamed(name) {
   return null;
 }
 
-function selectNode(id) {
-  state.selectedNode = id;
+function selectPort(key) {
+  state.selectedPort = key === state.selectedPort ? "" : key;
+  state.selectedNode = state.selectedPort ? state.selectedPort.split("#")[0] : "";
   drawMap();
   renderInspector();
 }
 
-function neighboursOf(id) {
-  const out = [];
-  const back = [];
-  for (const edge of state.graph.edges) {
-    if (edge.from === id) { out.push(edge); }
-    if (edge.to === id) { back.push(edge); }
+function setPlane(plane) {
+  state.plane = plane;
+  state.selectedPort = "";
+  state.selectedNode = "";
+  for (const button of document.querySelectorAll("#plane-switch button")) {
+    button.setAttribute("aria-selected", String(button.dataset.plane === plane));
   }
-  return { out: out, back: back };
+  drawMap();
+  renderInspector();
 }
 
 function renderInspector() {
@@ -229,62 +332,29 @@ function renderInspector() {
   const head = el("div", { class: "inspector-head" });
   const grow = el("div", { class: "grow" });
   grow.appendChild(el("h2", {}, node.label));
-  grow.appendChild(el("div", { class: "card-desc" }, node.kind === "model" ? "model" : "external"));
+  grow.appendChild(el("div", { class: "card-desc mono" }, node.subtitle));
   head.appendChild(grow);
   const close = el("button", { class: "btn icon ghost", title: "Close" }, "\\u00d7");
-  close.addEventListener("click", () => selectNode(""));
+  close.addEventListener("click", () => selectPort(""));
   head.appendChild(close);
   panel.appendChild(head);
 
-  if (node.kind === "model") { inspectModel(panel, node.label); } else { inspectExternal(panel, node.label); }
-
-  const links = neighboursOf(node.id);
-  panel.appendChild(el("h3", {}, "Connections"));
-  if (links.out.length === 0 && links.back.length === 0) {
-    panel.appendChild(el("div", { class: "dim" }, "Nothing points at this node yet."));
-    return;
-  }
-  const chips = el("div", { class: "chips" });
-  for (const edge of links.out) { chips.appendChild(badge(edge.kind + " \\u2192 " + labelOf(edge.to), edgeTone(edge.kind))); }
-  for (const edge of links.back) { chips.appendChild(badge(labelOf(edge.from) + " \\u2192 " + edge.kind, edgeTone(edge.kind))); }
-  panel.appendChild(chips);
+  const parts = state.selectedPort.split("#");
+  const port = parts.length > 1 ? parts[1] : "";
+  if (node.kind === "model") { inspectModel(panel, node, port); } else { inspectExternal(panel, node.label); }
 }
 
-function edgeTone(kind) {
-  if (kind === "relation") { return "violet"; }
-  if (kind === "invokes") { return "info"; }
-  if (kind === "compensates") { return "warn"; }
-  return "ok";
-}
-
-function labelOf(id) {
-  const node = nodesById()[id];
-  return node ? node.label : id;
-}
-
-function inspectModel(panel, name) {
-  const model = modelNamed(name);
+function inspectModel(panel, node, port) {
+  const model = modelNamed(node.label);
   if (!model) { return; }
-  panel.appendChild(el("h3", {}, "Table"));
-  const kv = el("div", { class: "kv" });
-  kv.appendChild(el("div", { class: "k" }, "table"));
-  kv.appendChild(el("div", { class: "mono" }, model.table));
-  kv.appendChild(el("div", { class: "k" }, "fields"));
-  kv.appendChild(el("div", {}, String(model.fields.length)));
-  kv.appendChild(el("div", { class: "k" }, "runs seen"));
-  kv.appendChild(el("div", {}, String(runCountFor(name))));
-  panel.appendChild(kv);
 
-  const flows = flowsFor(name);
-  if (flows.length > 0) {
-    panel.appendChild(el("h3", {}, "What each flow calls"));
-    for (const flow of flows) {
-      const line = el("div", { style: "margin-bottom:6px" });
-      line.appendChild(badge(flow.operation, "info"));
-      const steps = el("div", { class: "dim", style: "margin-top:3px" }, flow.steps.join("  →  "));
-      line.appendChild(steps);
-      panel.appendChild(line);
-    }
+  panel.appendChild(el("h3", {}, "Flows"));
+  for (const flow of node.ports) {
+    const row = el("div", { class: "flow-row" + (flow.id === port ? " on" : "") });
+    row.appendChild(badge(flow.label, flow.active ? "info" : ""));
+    row.appendChild(el("span", { class: flow.active ? "" : "dim" }, flow.detail || "calls nothing"));
+    row.addEventListener("click", () => selectPort(node.id + "#" + flow.id));
+    panel.appendChild(row);
   }
 
   panel.appendChild(el("h3", {}, "Fields"));
@@ -297,7 +367,6 @@ function inspectModel(panel, name) {
     if (field.relation.length > 0) { flags.appendChild(badge("\\u2192 " + field.relation[0], "violet")); }
     if (field.unique) { flags.appendChild(badge("unique", "info")); }
     if (field.index && !field.unique) { flags.appendChild(badge("index", "")); }
-    if (field.system) { flags.appendChild(badge("system", "")); }
     cell(row, flags);
     return row;
   });
@@ -315,7 +384,7 @@ function inspectExternal(panel, name) {
   kv.appendChild(el("div", {}, external.backoff));
   kv.appendChild(el("div", { class: "k" }, "timeout"));
   kv.appendChild(el("div", {}, external.timeoutMs + "ms"));
-  kv.appendChild(el("div", { class: "k" }, "compensates"));
+  kv.appendChild(el("div", { class: "k" }, "undone by"));
   kv.appendChild(el("div", {}, external.compensate.length > 0 ? external.compensate[0] : "nothing"));
   panel.appendChild(kv);
 
@@ -332,43 +401,6 @@ function inspectExternal(panel, name) {
   if (keys.length === 0) { traffic.appendChild(el("span", { class: "dim" }, "No calls recorded yet.")); }
   for (const key of keys) { traffic.appendChild(badge(key + " " + counts[key], toneForStatus(key))); }
   panel.appendChild(traffic);
-}
-
-function operationForRun(runId) {
-  for (const run of state.runs) { if (run.runId === runId) { return run.operation; } }
-  for (const span of state.obs.spans) { if (span.traceId === runId && span.name.indexOf(".") > 0) { return span.operation; } }
-  return "";
-}
-
-function operationForCall(model, externalName) {
-  for (const span of state.obs.spans) {
-    const attributes = span.attributes || {};
-    if (attributes.externalName !== externalName) { continue; }
-    if (span.model !== model) { continue; }
-    if (span.operation) { return span.operation; }
-  }
-  return "flow";
-}
-
-function flowsFor(model) {
-  const index = {};
-  const order = [];
-  for (const row of state.outbox) {
-    if (row.model !== model) { continue; }
-    if (row.compensationOf && row.compensationOf.length > 0) { continue; }
-    const operation = operationForRun(row.runId) || operationForCall(model, row.name);
-    if (!index[operation]) { index[operation] = {}; order.push(operation); }
-    const at = row.stepIndex;
-    if (index[operation][at] === undefined) { index[operation][at] = row.name; }
-  }
-  const built = [];
-  for (const operation of order) {
-    const steps = [];
-    const keys = Object.keys(index[operation]).toSorted((a, b) => Number(a) - Number(b));
-    for (const key of keys) { steps.push(index[operation][key]); }
-    built.push({ operation: operation, steps: steps });
-  }
-  return built;
 }
 
 function runCountFor(model) {

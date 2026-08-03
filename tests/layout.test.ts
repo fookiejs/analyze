@@ -1,6 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { layerAssignment, layerFor, layoutOf } from "../src/graph/layout.ts";
+import {
+  cardHeaderHeight,
+  heightOf,
+  layerAssignment,
+  layerFor,
+  layoutOf,
+  portIndexOf,
+  portRowHeight,
+} from "../src/graph/layout.ts";
 import type { GraphEdge, GraphNode } from "../src/graph/layout.ts";
 import {
   declaredEdges,
@@ -12,11 +20,21 @@ import {
 import type { ExternalSummary, ModelSummary, OutboxEntry, SpanEntry } from "@fookiejs/core";
 
 function node(id: string): GraphNode {
-  return { id, label: id, kind: "model" };
+  return { id, label: id, kind: "model", subtitle: "", ports: [] };
 }
 
 function edge(from: string, to: string): GraphEdge {
-  return { from, to, kind: "relation", label: "", weight: 1, step: 0 };
+  return {
+    from,
+    fromPort: "card",
+    to,
+    toPort: "card",
+    kind: "relation",
+    label: "",
+    weight: 1,
+    step: 0,
+    plane: "data",
+  };
 }
 
 describe("layered layout", () => {
@@ -171,7 +189,7 @@ describe("application map", () => {
     for (const relation of relations) {
       assert.equal(relation.from, modelNodeId("Order"));
       assert.equal(relation.to, modelNodeId("User"));
-      assert.equal(relation.label, "buyer →", "the edge says which column carries the link");
+      assert.equal(relation.label, "buyer", "the edge names the column that carries the link");
     }
   });
 
@@ -196,15 +214,28 @@ describe("application map", () => {
     const heavy = edges.filter((call) => call.from === modelNodeId("Order"));
     for (const call of heavy) {
       assert.equal(call.weight, 2, "the repeated call is counted, not duplicated");
-      assert.equal(call.label, "create step 2", "the edge names the flow and the step");
+      assert.equal(call.fromPort, "create", "the edge leaves the create flow port");
+      assert.equal(call.label, "2", "the edge carries the step number");
       assert.equal(call.step, 2);
     }
   });
 
   it("draws model to model edges from the recorded parent, not from timing", () => {
     const spans = [
-      { model: "Note", parentModel: ["Order"] },
-      { model: "Note", parentModel: ["Order"] },
+      {
+        model: "Note",
+        parentModel: ["Order"],
+        parentEntityId: ["e1"],
+        operation: "create",
+        traceId: "t1",
+      },
+      {
+        model: "Note",
+        parentModel: ["Order"],
+        parentEntityId: ["e1"],
+        operation: "create",
+        traceId: "t1",
+      },
       { model: "Order", parentModel: [] },
     ] as unknown as readonly SpanEntry[];
     const edges = observedNestingEdges(spans);
@@ -217,7 +248,15 @@ describe("application map", () => {
   });
 
   it("ignores a span whose parent is its own model", () => {
-    const spans = [{ model: "Order", parentModel: ["Order"] }] as unknown as readonly SpanEntry[];
+    const spans = [
+      {
+        model: "Order",
+        parentModel: ["Order"],
+        parentEntityId: ["e1"],
+        operation: "create",
+        traceId: "t1",
+      },
+    ] as unknown as readonly SpanEntry[];
     assert.equal(observedNestingEdges(spans).length, 0);
   });
 });
@@ -225,30 +264,56 @@ describe("application map", () => {
 describe("cyclic graphs", () => {
   it("still spreads a graph whose relation and nesting edges disagree", () => {
     const nodes = [
-      { id: "model:Order", label: "Order", kind: "model" },
-      { id: "model:OrderLog", label: "OrderLog", kind: "model" },
-      { id: "model:Customer", label: "Customer", kind: "model" },
-      { id: "external:pay", label: "pay", kind: "external" },
+      { id: "model:Order", label: "Order", kind: "model", subtitle: "", ports: [] },
+      { id: "model:OrderLog", label: "OrderLog", kind: "model", subtitle: "", ports: [] },
+      { id: "model:Customer", label: "Customer", kind: "model", subtitle: "", ports: [] },
+      { id: "external:pay", label: "pay", kind: "external", subtitle: "", ports: [] },
     ];
     const edges = [
       {
         from: "model:Order",
+        fromPort: "card",
         to: "model:Customer",
+        toPort: "card",
         kind: "relation",
         label: "",
         weight: 1,
         step: 0,
+        plane: "data",
       },
       {
         from: "model:OrderLog",
+        fromPort: "card",
         to: "model:Order",
+        toPort: "card",
         kind: "relation",
         label: "",
         weight: 1,
         step: 0,
+        plane: "data",
       },
-      { from: "model:Order", to: "model:OrderLog", kind: "nests", label: "", weight: 1, step: 0 },
-      { from: "model:Order", to: "external:pay", kind: "invokes", label: "", weight: 1, step: 1 },
+      {
+        from: "model:Order",
+        fromPort: "card",
+        to: "model:OrderLog",
+        toPort: "card",
+        kind: "nests",
+        label: "",
+        weight: 1,
+        step: 0,
+        plane: "flow",
+      },
+      {
+        from: "model:Order",
+        fromPort: "card",
+        to: "external:pay",
+        toPort: "card",
+        kind: "invokes",
+        label: "",
+        weight: 1,
+        step: 1,
+        plane: "flow",
+      },
     ];
 
     const layout = layoutOf(nodes, edges);
@@ -265,18 +330,89 @@ describe("cyclic graphs", () => {
 
   it("keeps a plain chain in dependency order", () => {
     const nodes = [
-      { id: "a", label: "a", kind: "model" },
-      { id: "b", label: "b", kind: "model" },
-      { id: "c", label: "c", kind: "model" },
+      { id: "a", label: "a", kind: "model", subtitle: "", ports: [] },
+      { id: "b", label: "b", kind: "model", subtitle: "", ports: [] },
+      { id: "c", label: "c", kind: "model", subtitle: "", ports: [] },
     ];
     const edges = [
-      { from: "a", to: "b", kind: "invokes", label: "", weight: 1, step: 1 },
-      { from: "b", to: "c", kind: "invokes", label: "", weight: 1, step: 2 },
+      {
+        from: "a",
+        fromPort: "card",
+        to: "b",
+        toPort: "card",
+        kind: "invokes",
+        label: "",
+        weight: 1,
+        step: 1,
+        plane: "flow",
+      },
+      {
+        from: "b",
+        fromPort: "card",
+        to: "c",
+        toPort: "card",
+        kind: "invokes",
+        label: "",
+        weight: 1,
+        step: 2,
+        plane: "flow",
+      },
     ];
     const layout = layoutOf(nodes, edges);
     const byId = new Map(layout.nodes.map((node) => [node.id, node]));
     assert.equal(byId.get("a")?.layer, 0);
     assert.equal(byId.get("b")?.layer, 1);
     assert.equal(byId.get("c")?.layer, 2);
+  });
+});
+
+describe("flow ports", () => {
+  const orderOnly = [
+    {
+      name: "Order",
+      table: "order",
+      fields: [
+        {
+          key: "id",
+          column: "id",
+          pgType: "UUID",
+          relation: [],
+          unique: false,
+          index: false,
+          system: true,
+        },
+      ],
+    },
+  ] as unknown as readonly ModelSummary[];
+
+  it("gives every model all four flows even when nothing was observed", () => {
+    const portIds = (card: GraphNode) => card.ports.map((port) => port.id);
+    for (const card of nodesOf(orderOnly, [])) {
+      assert.deepEqual(
+        portIds(card),
+        ["create", "list", "update", "delete"],
+        "an unused flow still has to be on the card",
+      );
+      for (const port of card.ports) {
+        assert.equal(port.active, false, "nothing observed means nothing lit");
+      }
+    }
+  });
+
+  it("marks the flow that was actually seen calling something", () => {
+    const uses = [{ model: "Order", operation: "create", steps: ["pay.charge"] }];
+    for (const card of nodesOf(orderOnly, [], uses)) {
+      for (const port of card.ports) {
+        assert.equal(port.active, port.id === "create", `${port.id} activity`);
+      }
+    }
+  });
+
+  it("sizes a card from its ports so edges can anchor on a row", () => {
+    for (const card of nodesOf(orderOnly, [])) {
+      assert.equal(heightOf(card), cardHeaderHeight + 4 * portRowHeight + 10);
+      assert.equal(portIndexOf(card, "delete"), 3);
+      assert.equal(portIndexOf(card, "nope"), -1);
+    }
   });
 });

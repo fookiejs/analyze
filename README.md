@@ -29,6 +29,26 @@ buffers, so it bypasses all of them. It serves:
 developer-authored statement with bound parameters; behind an HTTP endpoint it becomes an
 attacker-authored statement instead.
 
+### Signing in
+
+There are no accounts and no passwords. Analyze has no user store and should not invent one, and core
+has no concept of identity to borrow. What it has is a single access token, and the app that embeds the
+dashboard decides where that token comes from:
+
+```ts
+analyze(app, { ...defaultOptions(), port: ["4300"], token: [process.env.ANALYZE_TOKEN] });
+```
+
+Pass nothing and one is generated at boot, so a forgotten config never leaves the surface open. Print
+it, or pin it from your secret store so the link survives a restart.
+
+The token reaches the browser once. A `?token=…` in the address bar is consumed on load, kept in
+`sessionStorage`, and stripped from the URL, so a refresh works and the token stops travelling in
+history, bookmarks and screenshots. Arrive without one and you get a sign-in card to paste it into.
+
+The page shell is served without a token because it carries no data. Every `/api/*` endpoint stays
+behind `timingSafeEqual`, which is what the tests assert.
+
 ### What the defaults do for you
 
 | Default          | Behaviour                                                                                                      |

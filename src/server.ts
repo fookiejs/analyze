@@ -7,9 +7,11 @@ import { layoutOf } from "./graph/layout.ts";
 import {
   callersFromSpans,
   declaredEdges,
+  flowUsesFrom,
   nodesOf,
   observedExternalEdges,
   observedNestingEdges,
+  touchedFlows,
 } from "./map.ts";
 import type { OperationOf } from "./map.ts";
 import { defaultSensitiveKeys, redact } from "./redact.ts";
@@ -33,6 +35,8 @@ import {
 export const refreshIntervalMs = 3_000;
 
 export const maxStreamClients = 16;
+
+export const shellPath = "/";
 
 export type AnalyzeOptions = {
   port: readonly string[];
@@ -192,6 +196,10 @@ export class AnalyzeServer {
       sendJson(res, 403, { error: "cross origin requests are refused" });
       return false;
     }
+    if (pathOf(req.url) === shellPath) {
+      const pageNonce = nonce();
+      return sendHtml(res, indexHtml(pageNonce), pageNonce);
+    }
     if (tokenMatches(this.token, tokenFrom(req)) === false) {
       sendJson(res, 401, { error: "a valid token is required" });
       return false;
@@ -201,10 +209,6 @@ export class AnalyzeServer {
 
   private async route(req: http.IncomingMessage, res: http.ServerResponse): Promise<boolean> {
     const path = pathOf(req.url);
-    if (path === "/") {
-      const pageNonce = nonce();
-      return sendHtml(res, indexHtml(pageNonce), pageNonce);
-    }
     if (path === "/api/health") {
       return sendJson(res, 200, { ok: true, models: this.source.catalog().length });
     }
@@ -237,12 +241,13 @@ export class AnalyzeServer {
     const models = this.source.catalog();
     const externals = this.source.externalCatalog();
     const rows = await this.source.outboxList({ status: [], runId: [], limit: 500, offset: 0 });
+    const spans = this.source.observability(0).spans;
     const runs = await this.source.runList({ phase: [], limit: 500, offset: 0 });
     let operations: readonly OperationOf[] = [];
     for (const run of runs) {
       operations = appendItem(operations, { runId: run.runId, operation: run.operation });
     }
-    for (const span of this.source.observability(0).spans) {
+    for (const span of spans) {
       if (span.operation.length < 1) {
         continue;
       }
@@ -252,14 +257,15 @@ export class AnalyzeServer {
       operations = appendItem(operations, { runId: span.traceId, operation: span.operation });
     }
     let edges = declaredEdges(models, externals);
-    const callers = callersFromSpans(this.source.observability(0).spans);
+    const callers = callersFromSpans(spans);
     for (const edge of observedExternalEdges(rows, operations, callers)) {
       edges = appendItem(edges, edge);
     }
-    for (const edge of observedNestingEdges(this.source.observability(0).spans)) {
+    for (const edge of observedNestingEdges(spans)) {
       edges = appendItem(edges, edge);
     }
-    return layoutOf(nodesOf(models, externals), edges);
+    const uses = flowUsesFrom(rows, operations, callers);
+    return layoutOf(nodesOf(models, externals, uses, touchedFlows(edges)), edges);
   }
 
   private async runs(rawUrl: http.IncomingMessage["url"]): Promise<unknown> {

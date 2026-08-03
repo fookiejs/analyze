@@ -88,16 +88,11 @@ function topbarHtml(): string {
 function mapViewHtml(): string {
   return `<section id="view-map" class="canvas-wrap">
 <div id="map-canvas"></div>
-<div class="map-legend">
-<div class="row"><span class="swatch rel"></span><span><b>declared relation.</b> The arrow starts at the model that stores the column and points at the model it refers to.</span></div>
-<div class="row"><span class="swatch inv"></span><span><b>observed call.</b> That flow really called that external, and the label says in which step.</span></div>
-<div class="row"><span class="swatch comp"></span><span><b>compensation.</b> If the saga rolls back, the first external is undone by the second.</span></div>
-<div class="row"><span class="swatch nest"></span><span><b>observed nesting.</b> The first model started an operation on the second inside its own flow.</span></div>
+<div class="map-controls" id="plane-switch">
+<button class="btn ghost" data-plane="flow" aria-selected="true">Flows</button>
+<button class="btn ghost" data-plane="data" aria-selected="false">Data</button>
+<button class="btn ghost" data-plane="both" aria-selected="false">Both</button>
 </div>
-<div class="map-controls">
-<span class="dim" style="padding:4px 8px;font-size:11px">drag to pan &middot; scroll to zoom &middot; click a node</span>
-</div>
-<div class="map-hint">press f to fit</div>
 <div class="inspector" id="inspector"></div>
 </section>`;
 }
@@ -112,6 +107,15 @@ export function indexHtml(pageNonce: string): string {
 <style nonce="${pageNonce}">${stylesCss()}</style>
 </head>
 <body>
+<div class="gate" id="gate">
+<form class="gate-card" id="gate-form">
+<div class="brand-mark">f</div>
+<h2>fookie analyze</h2>
+<p class="card-desc">This dashboard is locked to the token the app printed when it started.</p>
+<input class="input" id="gate-input" type="password" placeholder="access token" autocomplete="off" spellcheck="false" />
+<button class="btn" type="submit">Unlock</button>
+</form>
+</div>
 <div class="shell">
 ${sidebarHtml()}
 <div class="main">
