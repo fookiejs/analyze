@@ -174,12 +174,86 @@ function externalsFor(model) {
   return built;
 }
 
+function renderToolbar(host, onChange) {
+  const bar = el("div", { class: "toolbar" });
+  const box = el("input", {
+    class: "input",
+    id: "search-box",
+    placeholder: "Search model, external, message or reason",
+  });
+  box.value = state.search;
+  box.addEventListener("input", (event) => {
+    state.search = event.target.value;
+    state.page = 0;
+    onChange();
+  });
+  bar.appendChild(box);
+
+  const trouble = el("button", { class: "btn" + (state.troubleOnly ? " on" : "") }, "Trouble only");
+  trouble.setAttribute("aria-selected", String(state.troubleOnly));
+  trouble.addEventListener("click", () => {
+    state.troubleOnly = !state.troubleOnly;
+    state.page = 0;
+    onChange();
+  });
+  bar.appendChild(trouble);
+  host.appendChild(bar);
+}
+
+function pager(host, shown, total, onChange) {
+  const bar = el("div", { class: "pager" });
+  const back = el("button", { class: "btn ghost" }, "\u2190 newer");
+  back.disabled = state.page < 1;
+  back.addEventListener("click", () => {
+    state.page = Math.max(state.page - 1, 0);
+    onChange();
+  });
+  bar.appendChild(back);
+
+  const from = total === 0 ? 0 : state.page * pageSize + 1;
+  const to = state.page * pageSize + shown;
+  bar.appendChild(el("span", { class: "dim" }, from + "\u2013" + to + " of " + total));
+
+  const on = el("button", { class: "btn ghost" }, "older \u2192");
+  on.disabled = (state.page + 1) * pageSize >= total;
+  on.addEventListener("click", () => {
+    state.page = state.page + 1;
+    onChange();
+  });
+  bar.appendChild(on);
+  host.appendChild(bar);
+}
+
+const pageSize = 40;
+
+function matchesSearch(haystack) {
+  const needle = state.search.trim().toLowerCase();
+  if (needle.length < 1) { return true; }
+  for (const part of haystack) {
+    if (String(part).toLowerCase().includes(needle)) { return true; }
+  }
+  return false;
+}
+
+function troubledOutbox(row) {
+  if (row.status === "dead_letter") { return true; }
+  if (row.status === "failed") { return true; }
+  if (row.error && row.error.length > 0) { return true; }
+  if (row.compensationOf && row.compensationOf.length > 0) { return true; }
+  return false;
+}
+
 function outboxRows() {
-  if (state.runFilter.length < 1) { return state.outbox; }
-  if (state.runRows.length > 0) { return state.runRows; }
+  let source = state.outbox;
+  if (state.runFilter.length > 0) {
+    source = state.runRows.length > 0 ? state.runRows : state.outbox;
+  }
   const kept = [];
-  for (const row of state.outbox) {
-    if (row.runId !== state.runFilter) { continue; }
+  for (const row of source) {
+    if (state.runFilter.length > 0 && row.runId !== state.runFilter) { continue; }
+    if (state.troubleOnly === true && troubledOutbox(row) === false) { continue; }
+    const reason = row.error && row.error.length > 0 ? row.error[0] : "";
+    if (matchesSearch([row.name, row.model, row.status, reason]) === false) { continue; }
     kept.push(row);
   }
   return kept;
@@ -200,8 +274,13 @@ function renderOutbox() {
     return;
   }
   clear(host);
-  const shown = outboxRows();
-  tableOf(host, ["External", "Model", "Status", "Attempt", "Step", "Request"], shown, (row) => {
+  renderToolbar(host, renderOutbox);
+  const found = outboxRows();
+  const shown = found.slice(state.page * pageSize, state.page * pageSize + pageSize);
+  const table = el("div", {});
+  host.appendChild(table);
+  pager(host, shown.length, found.length, renderOutbox);
+  tableOf(table, ["External", "Model", "Status", "Attempt", "Step", "Request"], shown, (row) => {
     const line = el("tr", {});
     cell(line, row.name);
     cell(line, row.model);
@@ -215,12 +294,18 @@ function renderOutbox() {
   });
 }
 
+function troubledLog(entry) {
+  if (entry.level === "error") { return true; }
+  if (entry.level === "warn") { return true; }
+  return false;
+}
+
 function logRows() {
-  const rows = state.obs.logs.toReversed();
-  if (state.runFilter.length < 1) { return rows; }
   const kept = [];
-  for (const entry of rows) {
-    if (entry.traceId !== state.runFilter) { continue; }
+  for (const entry of state.obs.logs.toReversed()) {
+    if (state.runFilter.length > 0 && entry.traceId !== state.runFilter) { continue; }
+    if (state.troubleOnly === true && troubledLog(entry) === false) { continue; }
+    if (matchesSearch([entry.message, entry.model, entry.operation, entry.level]) === false) { continue; }
     kept.push(entry);
   }
   return kept;
@@ -242,7 +327,12 @@ function renderLogs() {
     return;
   }
   clear(host);
-  tableOf(host, ["", "Time", "Model", "Operation", "Message", "Request"], rows.slice(0, 300), (entry) => {
+  renderToolbar(host, renderLogs);
+  const shown = rows.slice(state.page * pageSize, state.page * pageSize + pageSize);
+  const table = el("div", {});
+  host.appendChild(table);
+  pager(host, shown.length, rows.length, renderLogs);
+  tableOf(table, ["", "Time", "Model", "Operation", "Message", "Request"], shown, (entry) => {
     const line = el("tr", {});
     cell(line, badge(entry.level, toneForLevel(entry.level)));
     cell(line, el("span", { class: "dim mono" }, clock(entry.timestamp)));
@@ -321,6 +411,7 @@ function show(name) {
   const heading = titles[name] || titles.map;
   byId("view-title").textContent = heading[0];
   byId("view-subtitle").textContent = heading[1];
+  state.page = 0;
   byId("content").classList.toggle("flush", name === "map");
   byId("map-actions").hidden = name !== "map";
   byId("runs-actions").hidden = name !== "runs";

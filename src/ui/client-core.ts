@@ -47,6 +47,9 @@ const state = {
   openTraces: {},
   filter: "",
   runFilter: "",
+  search: "",
+  troubleOnly: false,
+  page: 0,
   camera: { x: 40, y: 40, k: 1, ready: false },
 };
 

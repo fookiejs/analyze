@@ -537,3 +537,34 @@ describe("the map lays a saga out as a staircase", () => {
     assert.ok(js.includes("Recent operations"), "the card links out to the runs it took part in");
   });
 });
+
+describe("finding the thing that went wrong", () => {
+  it("ships a search box, a trouble filter and a pager", () => {
+    const js = clientJs();
+    for (const symbol of [
+      "renderToolbar",
+      "pager",
+      "matchesSearch",
+      "troubledOutbox",
+      "troubledLog",
+      "pageSize",
+    ]) {
+      assert.ok(js.includes(symbol), `${symbol} must reach the browser`);
+    }
+    assert.ok(js.includes("Trouble only"), "one click has to narrow to what broke");
+    assert.ok(js.includes("state.page"), "and the list has to page rather than truncate");
+  });
+
+  it("searches the reason a step failed, not only its name", () => {
+    const js = clientJs();
+    assert.ok(
+      js.includes("matchesSearch([row.name, row.model, row.status, reason])"),
+      "the reason is the field an operator actually remembers",
+    );
+  });
+
+  it("no longer truncates the log table at a fixed slice", () => {
+    const js = clientJs();
+    assert.equal(js.includes("rows.slice(0, 300)"), false, "paging replaced the hard cut");
+  });
+});

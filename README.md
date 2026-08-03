@@ -114,6 +114,24 @@ memory only, so an old request genuinely has nothing left to show.
 The canvas opens showing everything, flows and relations together, with switches to look at one plane
 at a time.
 
+## Finding the one that broke
+
+Both listings carry a search box and a **Trouble only** switch, and both page rather than truncate.
+
+Search reads the failure reason, not only the name. Typing part of the message an external answered
+with narrows a three hundred row outbox to the thirty rows that carry it, which is the difference
+between knowing something failed and knowing what it said. It matches the external, the model, the
+status and the reason, case-insensitively.
+
+**Trouble only** keeps the rows an operator came here for: dead letters, failed steps, anything that
+carries an error, and every compensation. A compensation is trouble even though it succeeded, because
+it only exists to undo something that did not.
+
+The log table used to stop at a fixed slice of three hundred rows and say nothing about the rest. It
+now pages, so the count is the truth: **1-40 of 300** tells you how much is behind the page you are
+reading. Changing the search, the filter or the followed request returns to the first page, since a
+page number means nothing once the set beneath it changes.
+
 ## It streams deltas, not the world
 
 The dashboard used to refetch everything on every tick: measured at **~4 MB every three seconds**, of

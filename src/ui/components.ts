@@ -362,6 +362,15 @@ export function mapCss(): string {
 }
 .meter:last-of-type { border-bottom: 0; }
 .meter-value { margin-left: auto; }
+
+.pager {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-top: 1px solid var(--border); font-size: 12px;
+}
+.pager .btn[disabled] { opacity: 0.4; cursor: default; }
+.pager .dim { margin: 0 auto; }
+.btn[aria-selected="true"] { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+.toolbar { padding: 10px 12px 0; }
 `.trim();
 }
 
