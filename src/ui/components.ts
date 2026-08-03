@@ -361,6 +361,11 @@ export function mapCss(): string {
   border-bottom: 1px solid var(--border); font-size: 12px;
 }
 .meter:last-of-type { border-bottom: 0; }
+.rel-list { margin-top: 10px; }
+.rel-line {
+  display: flex; align-items: baseline; gap: 7px; padding: 3px 0; font-size: 12px;
+}
+.rel-target { color: var(--info); font-weight: 600; }
 .jump {
   display: block; width: 100%; text-align: left; margin: 5px 0;
 }

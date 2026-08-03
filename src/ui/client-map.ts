@@ -89,8 +89,7 @@ function edgePath(from, fromPort, to, toPort) {
 function visibleEdges() {
   const shown = [];
   for (const edge of state.graph.edges) {
-    if (state.plane === "flow" && edge.plane !== "flow") { continue; }
-    if (state.plane === "data" && edge.plane !== "data") { continue; }
+    if (edge.plane !== "flow") { continue; }
     shown.push(edge);
   }
   return shown;
@@ -382,16 +381,6 @@ function selectPort(key) {
   renderInspector();
 }
 
-function setPlane(plane) {
-  state.plane = plane;
-  state.selectedPort = "";
-  state.selectedNode = "";
-  for (const button of document.querySelectorAll("#plane-switch button")) {
-    button.setAttribute("aria-selected", String(button.dataset.plane === plane));
-  }
-  drawMap();
-  renderInspector();
-}
 
 function metricsForModel(name) {
   const totals = {};

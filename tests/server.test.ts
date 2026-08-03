@@ -403,11 +403,15 @@ describe("pages that link to each other", () => {
     );
   });
 
-  it("opens on everything rather than hiding a plane", () => {
+  it("splits flows and relations into two views rather than one toggle", () => {
     const html = indexHtml("n");
-    assert.match(html, /data-plane="both" aria-selected="true"/, "nothing is hidden by default");
+    assert.equal(html.includes("plane-switch"), false, "the toggle is gone");
+    assert.match(html, /Flows<\/h1>/, "the map is about flows");
+    assert.match(html, /Relations/, "relations get their own entry in the nav");
     const js = clientJs();
-    assert.ok(js.includes('plane: "both"'), "the client agrees with the markup");
+    assert.equal(js.includes("state.plane"), false, "and the client no longer tracks a plane");
+    assert.ok(js.includes('edge.plane !== "flow"'), "the map draws flow edges and nothing else");
+    assert.ok(js.includes("relationList"), "relations are listed where they belong");
   });
 
   it("says why a filtered view is empty instead of showing nothing", () => {

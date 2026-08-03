@@ -68,9 +68,8 @@ function renderModels() {
     const stats = el("div", { class: "kv", style: "margin-top:12px" });
     stats.appendChild(el("div", { class: "k" }, "runs"));
     stats.appendChild(el("div", {}, String(runCountFor(model.name))));
-    stats.appendChild(el("div", { class: "k" }, "relations"));
-    stats.appendChild(el("div", {}, String(relationCountFor(model))));
     body.appendChild(stats);
+    body.appendChild(relationList(model));
     card.appendChild(body);
 
     card.addEventListener("click", () => {
@@ -83,6 +82,24 @@ function renderModels() {
   host.appendChild(grid);
 }
 
+function relationList(model) {
+  const box = el("div", { class: "rel-list" });
+  let any = false;
+  for (const field of model.fields) {
+    for (const target of field.relation) {
+      any = true;
+      const row = el("div", { class: "rel-line" });
+      row.appendChild(el("span", { class: "mono" }, field.key));
+      row.appendChild(el("span", { class: "dim" }, "→"));
+      row.appendChild(el("span", { class: "rel-target" }, target));
+      box.appendChild(row);
+    }
+  }
+  if (any === false) {
+    box.appendChild(el("div", { class: "dim" }, "points at nothing"));
+  }
+  return box;
+}
 function relationCountFor(model) {
   let total = 0;
   for (const field of model.fields) { if (field.relation.length > 0) { total = total + 1; } }
@@ -395,8 +412,8 @@ function paint() {
 }
 
 const titles = {
-  map: ["Application map", "Declared relations and the calls actually observed"],
-  models: ["Models", "Every registered model, its columns and what it has called"],
+  map: ["Flows", "What each operation calls, in the order it called it"],
+  models: ["Relations", "Every model, its columns and what it points at"],
   runs: ["Operations", "Each root operation with the flows it started underneath"],
   outbox: ["Outbox", "One row per external call attempt"],
   stuck: ["Stuck", "Steps that exhausted their attempts, grouped by what stopped them"],
@@ -439,9 +456,6 @@ function wire() {
     zoomAt(box.left + box.width / 2, box.top + box.height / 2, 1 / 1.2);
   });
   byId("zoom-fit").addEventListener("click", fitMap);
-  for (const button of document.querySelectorAll("#plane-switch button")) {
-    button.addEventListener("click", () => setPlane(button.dataset.plane));
-  }
   byId("runs-filter").addEventListener("input", (event) => {
     state.filter = event.target.value;
     renderRuns();

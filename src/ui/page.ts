@@ -65,7 +65,7 @@ function sidebarHtml(): string {
 <nav class="nav">
 <div class="nav-label">Overview</div>
 ${navItem("map", "Map", "count-models")}
-${navItem("models", "Models", "count-models-2")}
+${navItem("models", "Relations", "count-models-2")}
 <div class="nav-label">Activity</div>
 ${navItem("runs", "Operations", "count-runs")}
 ${navItem("outbox", "Outbox", "count-outbox")}
@@ -82,7 +82,7 @@ ${navItem("logs", "Logs", "count-logs")}
 function topbarHtml(): string {
   return `<header class="topbar">
 <div class="title">
-<h1 id="view-title">Application map</h1>
+<h1 id="view-title">Flows</h1>
 <div class="subtitle" id="view-subtitle">Declared relations and the calls actually observed</div>
 </div>
 <div class="crumb" id="crumb" hidden></div>
@@ -101,11 +101,6 @@ function topbarHtml(): string {
 function mapViewHtml(): string {
   return `<section id="view-map" class="canvas-wrap">
 <div id="map-canvas"></div>
-<div class="map-controls" id="plane-switch">
-<button class="btn ghost" data-plane="both" aria-selected="true">Everything</button>
-<button class="btn ghost" data-plane="flow" aria-selected="false">Flows only</button>
-<button class="btn ghost" data-plane="data" aria-selected="false">Relations only</button>
-</div>
 <div class="inspector" id="inspector"></div>
 <div class="detail" id="detail"></div>
 </section>`;

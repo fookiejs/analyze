@@ -42,7 +42,6 @@ const state = {
   selectedNode: "",
   selectedPort: "",
   selectedModel: "",
-  plane: "both",
   focus: "",
   openTraces: {},
   filter: "",
