@@ -13,7 +13,6 @@ export const defaultSensitiveKeys: readonly string[] = [
   "apikey",
   "api_key",
   "authorization",
-  "auth",
   "credential",
   "sessionid",
   "session_id",

@@ -38,6 +38,7 @@ const state = {
   selectedRun: "",
   runTrail: { steps: [], phase: "", waiting: [], model: "" },
   runRows: [],
+  selectedStep: "",
   selectedNode: "",
   selectedPort: "",
   selectedModel: "",

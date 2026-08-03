@@ -84,6 +84,23 @@ exporter anywhere in core, so the tracer is a no-op and these buffers are the en
 with the process. "What happened last night" is a question analyze cannot answer today, and that is a
 decision waiting to be made rather than an oversight.
 
+## Why it failed, in the interface
+
+Clicking a step — in the operations tree or in the outbox table — opens a drawer that answers the only
+question that matters when something is wrong:
+
+- **Why it failed**, quoting the reason the external reported, not a generic status
+- the **input it was given** and, for a completed step, the **output it returned**
+- attempt count, step index, and whether the step is itself an undo of another
+- when it started and how long it took, taken from the span
+- a link back to the request, and the lines that request logged
+
+Redaction still applies to both the input and the output. The deny list deliberately does **not** match
+a bare `auth`, because `authId` is how you correlate a payment across the authorise and capture steps
+and hiding it would make the drawer useless; `authorization`, `token`, `secret` and `credential` are
+still removed. Add to `defaultSensitiveKeys` rather than replacing it if your bodies carry something
+else.
+
 ## Every page is about the same request
 
 A request id is clickable wherever it appears — in the logs, in the outbox, on an operation in the

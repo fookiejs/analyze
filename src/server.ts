@@ -1,7 +1,7 @@
 import { z } from "zod";
 import http from "node:http";
 import { appendItem, isSagaPhase, textOrFallback } from "@fookiejs/core";
-import type { Phase } from "@fookiejs/core";
+import type { JsonValue, OutboxEntry, Phase } from "@fookiejs/core";
 import { AnalyzeError } from "./errors.ts";
 import { layoutOf } from "./graph/layout.ts";
 import {
@@ -17,6 +17,7 @@ import {
 } from "./map.ts";
 import type { OperationOf } from "./map.ts";
 import { defaultSensitiveKeys, redact } from "./redact.ts";
+import type { Redactable } from "./redact.ts";
 import type { AnalyzeSource } from "./source.ts";
 import { indexHtml } from "./ui/page.ts";
 import {
@@ -39,6 +40,8 @@ export const refreshIntervalMs = 3_000;
 export const maxStreamClients = 16;
 
 export const shellPath = "/";
+
+export const completedOutboxStatus = "completed";
 
 export type AnalyzeOptions = {
   port: readonly string[];
@@ -339,9 +342,21 @@ export class AnalyzeServer {
         compensationOf: row.compensationOf,
         error: row.error,
         input: redact(row.input, this.deny),
+        output: this.outputOf(row),
       });
     }
     return cleaned;
+  }
+
+  private outputOf(row: OutboxEntry): readonly JsonValue[] {
+    const carried = z.looseObject({ output: z.custom<Redactable>(() => true) }).safeParse(row);
+    if (carried.success === false) {
+      return [];
+    }
+    if (String(row.status) !== completedOutboxStatus) {
+      return [];
+    }
+    return [redact(carried.data.output, this.deny)];
   }
 
   private observability(rawUrl: http.IncomingMessage["url"]): unknown {

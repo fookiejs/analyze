@@ -155,6 +155,11 @@ function stepRow(node, depth, span0, total, label) {
   track.appendChild(bar);
   line.appendChild(track);
   line.appendChild(el("span", { class: "meta dim mono" }, duration(took)));
+  const attributes = span.attributes || {};
+  if (attributes.externalId) {
+    line.classList.add("openable");
+    line.addEventListener("click", () => openStep(attributes.externalId));
+  }
   rows.push(line);
 
   for (const child of node.children) {
@@ -297,6 +302,8 @@ function clearRunFilter() {
   state.runFilter = "";
   state.selectedRun = "";
   state.runTrail = { steps: [], phase: "", waiting: [], model: "" };
+  state.runRows = [];
+  closeStep();
   renderFocusRail();
   renderCrumb();
   paint();
@@ -358,6 +365,7 @@ async function selectRun(runId) {
   state.runFilter = state.selectedRun;
   renderFocusRail();
   renderCrumb();
+  renderRequestDetail(state.selectedRun);
   drawMap();
 }
 

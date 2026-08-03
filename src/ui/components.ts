@@ -321,6 +321,40 @@ export function mapCss(): string {
 }
 .flow-row:hover { background: var(--accent); }
 .flow-row.on { background: color-mix(in srgb, var(--info) 12%, transparent); }
+
+.detail {
+  position: fixed; right: 0; top: 0; bottom: 0; width: 400px; z-index: 12;
+  border-left: 1px solid var(--border); background: var(--card);
+  box-shadow: var(--shadow-lg); overflow: auto; padding: 16px; display: none;
+}
+.detail.on { display: block; }
+.detail h3 {
+  margin: 16px 0 7px; color: var(--muted-foreground); font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: 0.07em;
+}
+
+.json {
+  margin: 0; padding: 10px 12px; border-radius: 8px; overflow: auto; max-height: 260px;
+  border: 1px solid var(--border); background: var(--background);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px;
+  line-height: 1.5; color: var(--foreground); white-space: pre;
+}
+
+.reason {
+  padding: 10px 12px; border-radius: 8px; font-size: 12.5px; line-height: 1.5;
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.log-line {
+  display: flex; align-items: baseline; gap: 7px; padding: 4px 0;
+  border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.log-line:last-child { border-bottom: 0; }
+
+.step.openable { cursor: pointer; border-radius: 6px; }
+.step.openable:hover { background: var(--card-hover); }
 `.trim();
 }
 

@@ -209,6 +209,8 @@ function renderOutbox() {
     cell(line, String(row.attempt), "num");
     cell(line, String(row.stepIndex), "num");
     cell(line, runLink(row.runId));
+    line.classList.add("clickable");
+    line.addEventListener("click", () => openStep(row.externalId));
     return line;
   });
 }

@@ -82,3 +82,22 @@ describe("redaction", () => {
     assert.equal(cleaned.nickname, "[redacted]");
   });
 });
+
+describe("what the deny list must not swallow", () => {
+  it("keeps an identifier that merely sounds like a secret", () => {
+    const cleaned = JSON.stringify(
+      redact({
+        authId: "auth_7f3c",
+        authorId: "019fc6",
+        authorised: true,
+        authorization: "Bearer sk-live",
+        token: "sk-live",
+      }),
+    );
+    assert.match(cleaned, /"authId":"auth_7f3c"/, "an auth id is how you correlate a payment");
+    assert.match(cleaned, /"authorId":"019fc6"/);
+    assert.match(cleaned, /"authorised":true/);
+    assert.match(cleaned, /"authorization":"\[redacted\]"/, "the header still goes");
+    assert.match(cleaned, /"token":"\[redacted\]"/);
+  });
+});

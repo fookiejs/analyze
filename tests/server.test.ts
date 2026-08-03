@@ -257,6 +257,19 @@ describe("analyze server", () => {
     await res.json();
   });
 
+  it("ships the redacted output alongside the input", async () => {
+    const res = await auth("/api/outbox?limit=10");
+    const rows = (await res.json()) as readonly {
+      input: Record<string, unknown>;
+      output: readonly unknown[];
+      error: readonly string[];
+    }[];
+    for (const row of rows) {
+      assert.ok(Array.isArray(row.output), "output travels as a slot, present or absent");
+      assert.ok(Array.isArray(row.error), "so does the reason it failed");
+      assert.equal(row.input.apiKey, "[redacted]", "and both stay redacted");
+    }
+  });
   it("hands out only what is newer than the cursor", async () => {
     const everything = await auth("/api/obs?since=0");
     const all = (await everything.json()) as { logs: readonly { seq: number }[]; nextSeq: number };
@@ -400,5 +413,32 @@ describe("pages that link to each other", () => {
     const js = clientJs();
     assert.ok(js.includes("Nothing logged for this request"), "logs explain their own emptiness");
     assert.ok(js.includes("This request called nothing"), "so does the outbox");
+  });
+});
+
+describe("showing why something failed", () => {
+  it("ships client code that renders the reason, the input and the output", () => {
+    const js = clientJs();
+    for (const symbol of [
+      "openStep",
+      "renderStepDetail",
+      "renderRequestDetail",
+      "jsonBlock",
+      "spanForExternal",
+      "logsForRun",
+    ]) {
+      assert.ok(js.includes(symbol), `${symbol} must reach the browser`);
+    }
+    assert.ok(js.includes("Why it failed"), "the reason gets its own heading");
+    assert.ok(js.includes("Input it was given"), "so does the input");
+    assert.ok(js.includes("Output it returned"), "and the output");
+    assert.equal(js.includes("innerHTML"), false, "still never innerHTML");
+  });
+
+  it("styles the drawer it opens into", () => {
+    const css = stylesCss();
+    for (const selector of [".detail", ".json", ".reason", ".log-line", ".step.openable"]) {
+      assert.ok(css.includes(selector), `${selector} needs styling`);
+    }
   });
 });

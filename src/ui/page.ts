@@ -1,6 +1,7 @@
 import { mapCss, shellCss, treeCss, widgetCss } from "./components.ts";
 import { clientCoreJs } from "./client-core.ts";
 import { clientMapJs } from "./client-map.ts";
+import { clientDetailJs } from "./client-detail.ts";
 import { clientTraceJs } from "./client-trace.ts";
 import { clientViewsJs } from "./client-views.ts";
 import { themeCss } from "./theme.ts";
@@ -21,7 +22,7 @@ export function stylesCss(): string {
 }
 
 export function clientJs(): string {
-  const parts = [clientCoreJs(), clientMapJs(), clientTraceJs(), clientViewsJs()];
+  const parts = [clientCoreJs(), clientMapJs(), clientDetailJs(), clientTraceJs(), clientViewsJs()];
   for (const part of parts) {
     if (part.length < 1) {
       throw AnalyzeError.create("every client module must carry code");
@@ -98,6 +99,7 @@ function mapViewHtml(): string {
 <button class="btn ghost" data-plane="data" aria-selected="false">Relations only</button>
 </div>
 <div class="inspector" id="inspector"></div>
+<div class="detail" id="detail"></div>
 </section>`;
 }
 
