@@ -179,15 +179,15 @@ one or two cards deep on a canvas that was 3730x2582 and mostly empty.
 
 The map now uses vertical space to mean something:
 
-| Band   | Holds                               | Laid out as                                                           |
-| ------ | ----------------------------------- | --------------------------------------------------------------------- |
-| top    | models the flows only relate to     | a horizontal shelf, most-related first, wrapping at the spine's width |
-| middle | the flow and the externals it calls | the layered cascade, one column per step                              |
-| bottom | compensations                       | under the step each one undoes                                        |
+| Band   | Holds                               | Laid out as                                                                 |
+| ------ | ----------------------------------- | --------------------------------------------------------------------------- |
+| top    | models the flows only relate to     | a horizontal shelf, most-related first, wrapping at the spine's width       |
+| middle | the flow and the externals it calls | the layered cascade, one column per step                                    |
+| bottom | compensations                       | in the column of the step each one undoes, so the arrow drops straight down |
 
 Read down a column and you get what this part of the application touches, what it does, and how it
-takes it back. Measured on the same demo: canvas height fell from 2582 to 1514 and the tallest column
-from seven cards to four.
+takes it back. Measured on the same demo: canvas height fell from 2582 to 1174, the shelf spreads over
+eight columns holding a single card each, and every compensation sits directly beneath its step.
 
 ## The map is two maps
 
