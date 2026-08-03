@@ -2,6 +2,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { AnalyzeServer, defaultOptions } from "../src/server.ts";
 import { clientJs, indexHtml, stylesCss } from "../src/ui/page.ts";
+import { queryNumber } from "../src/transport.ts";
 import type { AnalyzeSource } from "../src/source.ts";
 import type {
   ExternalSummary,
@@ -311,5 +312,16 @@ describe("the page it serves", () => {
       assert.ok(html.includes(`data-view="${view}"`), `${view} needs a nav button`);
       assert.ok(html.includes(`id="view-${view}"`), `${view} needs a section`);
     }
+  });
+});
+
+describe("query parsing", () => {
+  it("uses the fallback when a number is absent, not zero", () => {
+    assert.equal(queryNumber("/api/graph", "depth", 4), 4, "no query string at all");
+    assert.equal(queryNumber("/api/graph?focus=Order", "depth", 4), 4, "some other parameter");
+    assert.equal(queryNumber("/api/graph?depth=", "depth", 4), 4, "present but empty");
+    assert.equal(queryNumber("/api/graph?depth=2", "depth", 4), 2, "an explicit value wins");
+    assert.equal(queryNumber("/api/graph?depth=nope", "depth", 4), 4, "nonsense falls back");
+    assert.equal(queryNumber("/api/graph?depth=0", "depth", 4), 0, "an explicit zero is honoured");
   });
 });

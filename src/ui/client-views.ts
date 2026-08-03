@@ -269,6 +269,40 @@ function renderRuns() {
   for (const group of groups.slice(0, 120)) { renderTrace(host, group); }
 }
 
+function renderFocusRail() {
+  const rail = byId("focus-rail");
+  if (!rail) { return; }
+  clear(rail);
+  rail.appendChild(el("div", { class: "rail-label" }, "Lifecycle"));
+
+  const all = el("button", { "aria-selected": String(state.focus === "") }, "Everything");
+  all.addEventListener("click", () => setFocus(""));
+  rail.appendChild(all);
+
+  for (const model of state.catalog) {
+    const button = el("button", { "aria-selected": String(state.focus === model.name) }, model.name);
+    button.appendChild(el("span", { class: "tag" }, String(model.fields.length)));
+    button.addEventListener("click", () => setFocus(model.name));
+    rail.appendChild(button);
+  }
+}
+
+async function setFocus(name) {
+  state.focus = name;
+  state.selectedPort = "";
+  state.selectedNode = "";
+  state.camera.ready = false;
+  renderFocusRail();
+  state.graph = await load(graphPath());
+  drawMap();
+  renderInspector();
+}
+
+function graphPath() {
+  if (state.focus.length < 1) { return "/api/graph"; }
+  return "/api/graph?focus=" + encodeURIComponent(state.focus);
+}
+
 function renderModels() {
   const host = byId("models-body");
   if (state.selectedModel) { renderModelDetail(host, state.selectedModel); return; }
@@ -450,7 +484,7 @@ function renderLogs() {
 async function refresh() {
   const [catalog, graph, runs, outbox, obs] = await Promise.all([
     load("/api/catalog"),
-    load("/api/graph"),
+    load(graphPath()),
     load("/api/runs?limit=200"),
     load("/api/outbox?limit=300"),
     load("/api/obs?since=0"),
@@ -471,7 +505,7 @@ function paint() {
   byId("count-runs").textContent = String(traceGroups().length);
   byId("count-outbox").textContent = String(state.outbox.length);
   byId("count-logs").textContent = String(state.obs.logs.length);
-  if (state.view === "map") { drawMap(); renderInspector(); }
+  if (state.view === "map") { renderFocusRail(); drawMap(); renderInspector(); }
   if (state.view === "models") { renderModels(); }
   if (state.view === "runs") { renderRuns(); }
   if (state.view === "outbox") { renderOutbox(); }

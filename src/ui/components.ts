@@ -174,21 +174,49 @@ export function mapCss(): string {
 }
 .map-controls button[aria-selected="true"] { background: var(--accent); color: var(--foreground); }
 
+.focus-rail {
+  position: absolute; left: 14px; top: 14px; width: 182px; max-height: calc(100% - 80px);
+  overflow: auto; padding: 6px; border-radius: 10px; border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  backdrop-filter: blur(8px); box-shadow: var(--shadow-lg);
+}
+.focus-rail .rail-label {
+  padding: 5px 8px 3px; font-size: 9.5px; font-weight: 600; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--muted-foreground);
+}
+.focus-rail button {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--muted-foreground);
+  font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
+}
+.focus-rail button:hover { background: var(--accent); color: var(--foreground); }
+.focus-rail button[aria-selected="true"] { background: var(--accent); color: var(--foreground); font-weight: 500; }
+.focus-rail .tag { margin-left: auto; font-size: 10px; color: var(--muted-foreground); }
+
 .node rect.body { fill: var(--card); stroke: var(--border); stroke-width: 1.25; }
 .node path.cap { fill: var(--muted); stroke: none; }
 .node.external path.cap { fill: color-mix(in srgb, var(--warning) 14%, transparent); }
 .node.model path.cap { fill: color-mix(in srgb, var(--info) 12%, transparent); }
-.node text.label { fill: var(--foreground); font-size: 13px; font-weight: 600; }
-.node text.sub { fill: var(--muted-foreground); font-size: 10px; }
+.node text.label { fill: var(--foreground); font-size: 15px; font-weight: 600; }
+.node text.sub { fill: var(--muted-foreground); font-size: 11px; }
+.node line.divider { stroke: var(--border); stroke-width: 1; }
+.node text.section-label {
+  fill: var(--muted-foreground); font-size: 9px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.09em;
+}
+.field text.field-key { fill: var(--foreground); font-size: 12px; }
+.field text.field-detail { fill: var(--muted-foreground); font-size: 11px; text-anchor: end; }
+.field.relation text.field-detail { fill: var(--violet); }
 .node.faded { opacity: 0.28; }
 
 .port rect.hit { fill: transparent; cursor: pointer; }
 .port:hover rect.hit { fill: var(--accent); }
 .port.lit rect.hit { fill: color-mix(in srgb, var(--info) 14%, transparent); }
-.port text.port-label { fill: var(--muted-foreground); font-size: 11.5px; }
-.port.active text.port-label { fill: var(--foreground); font-weight: 500; }
+.port text.port-label { fill: var(--muted-foreground); font-size: 13px; }
+.port.active text.port-label { fill: var(--foreground); font-weight: 600; }
 .port.lit text.port-label { fill: var(--info); }
-.port text.port-detail { fill: var(--muted-foreground); font-size: 9.5px; text-anchor: end; }
+.port text.port-detail { fill: var(--muted-foreground); font-size: 10.5px; text-anchor: end; }
+.port:not(.active) text.port-detail { opacity: 0.6; }
 .port circle.port-dot { fill: var(--background); stroke: var(--border); stroke-width: 1.5; }
 .port.active circle.port-dot.out { fill: var(--info); stroke: var(--info); }
 .port.lit circle.port-dot { fill: var(--info); stroke: var(--info); }

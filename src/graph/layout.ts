@@ -9,12 +9,19 @@ export type GraphPort = {
   active: boolean;
 };
 
+export type GraphField = {
+  key: string;
+  detail: string;
+  relation: readonly string[];
+};
+
 export type GraphNode = {
   id: string;
   label: string;
   kind: string;
   subtitle: string;
   ports: readonly GraphPort[];
+  fields: readonly GraphField[];
 };
 
 export type GraphEdge = {
@@ -49,13 +56,15 @@ export type Layout = {
   height: number;
 };
 
-export const nodeWidth = 236;
-export const cardHeaderHeight = 46;
-export const portRowHeight = 26;
-export const cardFooterHeight = 10;
+export const nodeWidth = 300;
+export const cardHeaderHeight = 58;
+export const portRowHeight = 34;
+export const sectionHeaderHeight = 24;
+export const fieldRowHeight = 24;
+export const cardFooterHeight = 12;
 export const plainNodeHeight = 58;
-export const columnGap = 150;
-export const rowGap = 30;
+export const columnGap = 190;
+export const rowGap = 34;
 
 export const flowPlane = "flow";
 export const dataPlane = "data";
@@ -67,7 +76,10 @@ export function heightOf(node: GraphNode): number {
   if (node.ports.length < 1) {
     return plainNodeHeight;
   }
-  const height = cardHeaderHeight + node.ports.length * portRowHeight + cardFooterHeight;
+  let height = cardHeaderHeight + node.ports.length * portRowHeight + cardFooterHeight;
+  if (node.fields.length > 0) {
+    height = height + sectionHeaderHeight + node.fields.length * fieldRowHeight;
+  }
   if (height < cardHeaderHeight) {
     throw AnalyzeError.create("a card is at least its header tall");
   }
@@ -354,6 +366,7 @@ export function layoutOf(nodes: readonly GraphNode[], edges: readonly GraphEdge[
         kind: seat.kind,
         subtitle: seat.subtitle,
         ports: seat.ports,
+        fields: seat.fields,
         layer: column,
         x: column * (nodeWidth + columnGap),
         y: cursor,
@@ -401,6 +414,7 @@ function centreColumns(nodes: readonly PlacedNode[], tallest: number): readonly 
       kind: node.kind,
       subtitle: node.subtitle,
       ports: node.ports,
+      fields: node.fields,
       layer: node.layer,
       x: node.x,
       y: node.y + shift,

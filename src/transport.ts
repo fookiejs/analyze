@@ -25,7 +25,11 @@ export function queryNumber(
     return fallback;
   }
   const raw = new URL(parsed.data, "http://local").searchParams.get(key);
-  const asNumber = z.coerce.number().int().nonnegative().safeParse(raw);
+  const given = z.string().min(1).safeParse(raw);
+  if (given.success === false) {
+    return fallback;
+  }
+  const asNumber = z.coerce.number().int().nonnegative().safeParse(given.data);
   if (asNumber.success === false) {
     return fallback;
   }

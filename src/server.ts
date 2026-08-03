@@ -8,6 +8,8 @@ import {
   callersFromSpans,
   declaredEdges,
   flowUsesFrom,
+  focusedGraph,
+  maxFocusDepth,
   nodesOf,
   observedExternalEdges,
   observedNestingEdges,
@@ -65,6 +67,17 @@ function listenPortOf(port: readonly string[]): readonly number[] {
     return [parsed];
   }
   return [];
+}
+
+function modelNames(models: readonly { name: string }[]): readonly string[] {
+  let names: readonly string[] = [];
+  for (const model of models) {
+    if (model.name.length < 1) {
+      continue;
+    }
+    names = appendItem(names, model.name);
+  }
+  return names;
 }
 
 function phasesFrom(rawUrl: http.IncomingMessage["url"]): readonly Phase[] {
@@ -219,7 +232,7 @@ export class AnalyzeServer {
       });
     }
     if (path === "/api/graph") {
-      return sendJson(res, 200, await this.graph());
+      return sendJson(res, 200, await this.graph(req.url));
     }
     if (path === "/api/runs") {
       return sendJson(res, 200, await this.runs(req.url));
@@ -237,7 +250,7 @@ export class AnalyzeServer {
     return false;
   }
 
-  private async graph(): Promise<unknown> {
+  private async graph(rawUrl: http.IncomingMessage["url"] = shellPath): Promise<unknown> {
     const models = this.source.catalog();
     const externals = this.source.externalCatalog();
     const rows = await this.source.outboxList({ status: [], runId: [], limit: 500, offset: 0 });
@@ -265,7 +278,22 @@ export class AnalyzeServer {
       edges = appendItem(edges, edge);
     }
     const uses = flowUsesFrom(rows, operations, callers);
-    return layoutOf(nodesOf(models, externals, uses, touchedFlows(edges)), edges);
+    let focus: readonly string[] = [];
+    for (const asked of queryList(rawUrl, "focus")) {
+      focus = [asked];
+    }
+    const detailed = focus.length > 0 ? focus : modelNames(models);
+    const cards = nodesOf(models, externals, uses, touchedFlows(edges), detailed);
+    for (const only of focus) {
+      const narrowed = focusedGraph(
+        cards,
+        edges,
+        only,
+        queryNumber(rawUrl, "depth", maxFocusDepth),
+      );
+      return layoutOf(narrowed.nodes, narrowed.edges);
+    }
+    return layoutOf(cards, edges);
   }
 
   private async runs(rawUrl: http.IncomingMessage["url"]): Promise<unknown> {

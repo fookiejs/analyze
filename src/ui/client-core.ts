@@ -36,6 +36,7 @@ const state = {
   selectedPort: "",
   selectedModel: "",
   plane: "flow",
+  focus: "",
   openTraces: {},
   filter: "",
   camera: { x: 40, y: 40, k: 1, ready: false },

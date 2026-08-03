@@ -3,7 +3,7 @@ import { appendItem } from "@fookiejs/core";
 import { AnalyzeError } from "./errors.ts";
 import type { ExternalSummary, ModelSummary, OutboxEntry, SpanEntry } from "@fookiejs/core";
 import { dataPlane, flowPlane } from "./graph/layout.ts";
-import type { GraphEdge, GraphNode, GraphPort } from "./graph/layout.ts";
+import type { GraphEdge, GraphField, GraphNode, GraphPort } from "./graph/layout.ts";
 
 export const modelNodeKind = "model";
 export const externalNodeKind = "external";
@@ -67,6 +67,72 @@ function usedSteps(uses: readonly FlowUse[], model: string, operation: string): 
   return [];
 }
 
+export const maxFocusDepth = 4;
+
+function reachableFrom(
+  start: string,
+  edges: readonly GraphEdge[],
+  depth: number,
+): readonly string[] {
+  let reached: readonly string[] = [start];
+  let frontier: readonly string[] = [start];
+  for (let hop = 0; hop < depth; hop = hop + 1) {
+    let next: readonly string[] = [];
+    for (const edge of edges) {
+      if (frontier.includes(edge.from) === false) {
+        continue;
+      }
+      if (reached.includes(edge.to)) {
+        continue;
+      }
+      reached = appendItem(reached, edge.to);
+      next = appendItem(next, edge.to);
+    }
+    if (next.length < 1) {
+      return reached;
+    }
+    frontier = next;
+  }
+  return reached;
+}
+
+export function focusedGraph(
+  nodes: readonly GraphNode[],
+  edges: readonly GraphEdge[],
+  focus: string,
+  depth: number = maxFocusDepth,
+): { nodes: readonly GraphNode[]; edges: readonly GraphEdge[] } {
+  if (z.string().min(1).safeParse(focus).success === false) {
+    return { nodes, edges };
+  }
+  const start = modelNodeId(focus);
+  let known = false;
+  for (const node of nodes) {
+    if (node.id === start) {
+      known = true;
+    }
+  }
+  if (known === false) {
+    return { nodes, edges };
+  }
+  const kept = reachableFrom(start, edges, Math.min(depth, maxFocusDepth));
+  let keptNodes: readonly GraphNode[] = [];
+  for (const node of nodes) {
+    if (kept.includes(node.id) === false) {
+      continue;
+    }
+    keptNodes = appendItem(keptNodes, node);
+  }
+  let keptEdges: readonly GraphEdge[] = [];
+  for (const edge of edges) {
+    if (kept.includes(edge.from) === false || kept.includes(edge.to) === false) {
+      continue;
+    }
+    keptEdges = appendItem(keptEdges, edge);
+  }
+  return { nodes: keptNodes, edges: keptEdges };
+}
+
 export function touchedFlows(edges: readonly GraphEdge[]): readonly string[] {
   let touched: readonly string[] = [];
   for (const edge of edges) {
@@ -83,6 +149,21 @@ export function touchedFlows(edges: readonly GraphEdge[]): readonly string[] {
   return touched;
 }
 
+export const idleFlow = "not observed";
+
+function stepSummary(steps: readonly string[], busy: boolean): string {
+  if (steps.length > 1) {
+    return `${String(steps.length)} calls`;
+  }
+  if (steps.length === 1) {
+    return "1 call";
+  }
+  if (busy === true) {
+    return "runs";
+  }
+  return idleFlow;
+}
+
 function flowPortsFor(
   model: ModelSummary,
   uses: readonly FlowUse[],
@@ -92,11 +173,12 @@ function flowPortsFor(
   for (const operation of flowOperations) {
     const steps = usedSteps(uses, model.name, operation);
     const reached = touched.includes(`${modelNodeId(model.name)} ${operation}`);
+    const busy = steps.length > 0 || reached === true;
     ports = appendItem(ports, {
       id: operation,
       label: operation,
-      detail: steps.join(" · "),
-      active: steps.length > 0 || reached === true,
+      detail: stepSummary(steps, busy),
+      active: busy,
     });
   }
   if (ports.length !== flowOperations.length) {
@@ -137,11 +219,44 @@ function externalPorts(external: ExternalSummary): readonly GraphPort[] {
   ];
 }
 
+export const maxShownFields = 9;
+
+function fieldRowsFor(model: ModelSummary, detailed: boolean): readonly GraphField[] {
+  if (detailed === false) {
+    return [];
+  }
+  let rows: readonly GraphField[] = [];
+  let hidden = 0;
+  for (const field of model.fields) {
+    if (field.system === true) {
+      continue;
+    }
+    if (rows.length >= maxShownFields) {
+      hidden = hidden + 1;
+      continue;
+    }
+    rows = appendItem(rows, {
+      key: field.key,
+      detail: field.relation.length > 0 ? firstText(field.relation) : field.pgType.toLowerCase(),
+      relation: field.relation,
+    });
+  }
+  if (hidden > 0) {
+    rows = appendItem(rows, {
+      key: `+${String(hidden)} more`,
+      detail: "…",
+      relation: [],
+    });
+  }
+  return rows;
+}
+
 export function nodesOf(
   models: readonly ModelSummary[],
   externals: readonly ExternalSummary[],
   uses: readonly FlowUse[] = [],
   touched: readonly string[] = [],
+  detailed: readonly string[] = [],
 ): readonly GraphNode[] {
   let nodes: readonly GraphNode[] = [];
   for (const model of models) {
@@ -151,6 +266,7 @@ export function nodesOf(
       kind: modelNodeKind,
       subtitle: `${model.table} · ${String(model.fields.length)} fields`,
       ports: flowPortsFor(model, uses, touched),
+      fields: fieldRowsFor(model, detailed.includes(model.name)),
     });
   }
   for (const external of externals) {
@@ -160,6 +276,7 @@ export function nodesOf(
       kind: externalNodeKind,
       subtitle: `${external.backoff} · ${String(external.timeoutMs)}ms`,
       ports: externalPorts(external),
+      fields: [],
     });
   }
   return nodes;

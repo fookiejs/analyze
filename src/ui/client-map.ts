@@ -2,8 +2,10 @@ export function clientMapJs(): string {
   return `
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 2.6;
-const CARD_HEADER = 46;
-const PORT_ROW = 26;
+const CARD_HEADER = 58;
+const PORT_ROW = 34;
+const SECTION_HEAD = 24;
+const FIELD_ROW = 24;
 
 function viewport() { return byId("viewport"); }
 
@@ -211,20 +213,40 @@ function portRow(node, port, at, trail) {
   const key = portKey(node.id, port.id);
   const lit = trail && trail.ports[key] === true ? " lit" : "";
   const row = svgEl("g", { class: "port" + (port.active ? " active" : "") + lit });
-  row.appendChild(svgEl("rect", { class: "hit", x: node.x + 1, y: y, width: node.width - 2, height: PORT_ROW }));
-  row.appendChild(svgEl("text", { class: "port-label", x: node.x + 15, y: mid + 4 }, port.label));
+  row.appendChild(svgEl("rect", { class: "hit", x: node.x + 1, y: y + 1, width: node.width - 2, height: PORT_ROW - 2, rx: "5" }));
+  row.appendChild(svgEl("text", { class: "port-label", x: node.x + 18, y: mid + 4.5 }, port.label));
   if (port.detail) {
-    row.appendChild(svgEl("text", { class: "port-detail", x: node.x + node.width - 15, y: mid + 4 }, port.detail));
+    row.appendChild(svgEl("text", { class: "port-detail", x: node.x + node.width - 18, y: mid + 4.5 }, port.detail));
   }
   if (port.active) {
-    row.appendChild(svgEl("circle", { class: "port-dot out", cx: node.x + node.width, cy: mid, r: "3.5" }));
+    row.appendChild(svgEl("circle", { class: "port-dot out", cx: node.x + node.width, cy: mid, r: "4" }));
   }
-  row.appendChild(svgEl("circle", { class: "port-dot in", cx: node.x, cy: mid, r: "3.5" }));
+  row.appendChild(svgEl("circle", { class: "port-dot in", cx: node.x, cy: mid, r: "4" }));
   row.addEventListener("click", (event) => {
     event.stopPropagation();
     selectPort(key);
   });
   return row;
+}
+
+function fieldRows(node) {
+  const rows = [];
+  if (node.fields.length === 0) { return rows; }
+  const top = node.y + CARD_HEADER + node.ports.length * PORT_ROW;
+  const head = svgEl("g", { class: "fields-head" });
+  head.appendChild(svgEl("line", { class: "divider", x1: node.x, y1: top, x2: node.x + node.width, y2: top }));
+  head.appendChild(svgEl("text", { class: "section-label", x: node.x + 18, y: top + 16 }, "fields"));
+  rows.push(head);
+  let at = 0;
+  for (const field of node.fields) {
+    const y = top + SECTION_HEAD + at * FIELD_ROW;
+    const line = svgEl("g", { class: "field" + (field.relation.length > 0 ? " relation" : "") });
+    line.appendChild(svgEl("text", { class: "field-key", x: node.x + 18, y: y + 16 }, field.key));
+    line.appendChild(svgEl("text", { class: "field-detail", x: node.x + node.width - 18, y: y + 16 }, field.detail));
+    rows.push(line);
+    at = at + 1;
+  }
+  return rows;
 }
 
 function cardFor(node, trail) {
@@ -240,6 +262,7 @@ function cardFor(node, trail) {
     wrap.appendChild(portRow(node, port, at, trail));
     at = at + 1;
   }
+  for (const row of fieldRows(node)) { wrap.appendChild(row); }
 
   wrap.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -267,8 +290,14 @@ function wireCamera(svg) {
     event.preventDefault();
     zoomAt(event.clientX, event.clientY, event.deltaY < 0 ? 1.12 : 1 / 1.12);
   }, { passive: false });
+  svg.addEventListener("auxclick", (event) => {
+    if (event.button === 1) { event.preventDefault(); }
+  });
+  svg.addEventListener("contextmenu", (event) => event.preventDefault());
   svg.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) { return; }
+    const panning = event.button === 1 || event.button === 2 || (event.button === 0 && event.altKey);
+    if (panning === false) { return; }
+    event.preventDefault();
     drag.on = true;
     drag.x = event.clientX - state.camera.x;
     drag.y = event.clientY - state.camera.y;

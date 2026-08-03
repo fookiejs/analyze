@@ -87,9 +87,21 @@ child to parent while nesting edges point parent to child, so a model that nests
 references it forms a two node cycle. Without cycle breaking the whole map collapses into a single
 column.
 
-The canvas pans and zooms like any node editor: drag to pan, scroll to zoom at the cursor, `f` or the
-Fit button to frame everything, and clicking a node opens an inspector with its columns, its
-compensation pairs and the traffic the outbox recorded for it.
+## One model at a time
+
+Every model has its own lifecycle, and reading twenty of them at once is a different question from
+reading one. The canvas answers the second by default: pick a model from the rail and you get its card
+in full — all four flows and its columns — with its neighbourhood around it as context, expanded to a
+**bounded depth** so the walk always terminates. "Everything" gives the coarse overview.
+
+A model card carries the four flows whether or not anything was ever observed on them, because "delete
+calls nothing" is a fact worth seeing rather than an absence to infer. Edges leave a flow row and land
+on the row they reach, so an arrow says which flow does what, not merely that two things are related.
+
+Clicking a flow lights every edge reachable from it and dims the rest.
+
+Mouse behaviour follows a CAD editor rather than a web page: **middle button drags the canvas, left
+click always selects**, and the wheel zooms at the cursor. `f` or the Fit button frames everything.
 
 ## The page
 

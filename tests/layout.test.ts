@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  cardFooterHeight,
   cardHeaderHeight,
   heightOf,
   layerAssignment,
@@ -20,7 +21,7 @@ import {
 import type { ExternalSummary, ModelSummary, OutboxEntry, SpanEntry } from "@fookiejs/core";
 
 function node(id: string): GraphNode {
-  return { id, label: id, kind: "model", subtitle: "", ports: [] };
+  return { id, label: id, kind: "model", subtitle: "", ports: [], fields: [] };
 }
 
 function edge(from: string, to: string): GraphEdge {
@@ -264,10 +265,24 @@ describe("application map", () => {
 describe("cyclic graphs", () => {
   it("still spreads a graph whose relation and nesting edges disagree", () => {
     const nodes = [
-      { id: "model:Order", label: "Order", kind: "model", subtitle: "", ports: [] },
-      { id: "model:OrderLog", label: "OrderLog", kind: "model", subtitle: "", ports: [] },
-      { id: "model:Customer", label: "Customer", kind: "model", subtitle: "", ports: [] },
-      { id: "external:pay", label: "pay", kind: "external", subtitle: "", ports: [] },
+      { id: "model:Order", label: "Order", kind: "model", subtitle: "", ports: [], fields: [] },
+      {
+        id: "model:OrderLog",
+        label: "OrderLog",
+        kind: "model",
+        subtitle: "",
+        ports: [],
+        fields: [],
+      },
+      {
+        id: "model:Customer",
+        label: "Customer",
+        kind: "model",
+        subtitle: "",
+        ports: [],
+        fields: [],
+      },
+      { id: "external:pay", label: "pay", kind: "external", subtitle: "", ports: [], fields: [] },
     ];
     const edges = [
       {
@@ -330,9 +345,9 @@ describe("cyclic graphs", () => {
 
   it("keeps a plain chain in dependency order", () => {
     const nodes = [
-      { id: "a", label: "a", kind: "model", subtitle: "", ports: [] },
-      { id: "b", label: "b", kind: "model", subtitle: "", ports: [] },
-      { id: "c", label: "c", kind: "model", subtitle: "", ports: [] },
+      { id: "a", label: "a", kind: "model", subtitle: "", ports: [], fields: [] },
+      { id: "b", label: "b", kind: "model", subtitle: "", ports: [], fields: [] },
+      { id: "c", label: "c", kind: "model", subtitle: "", ports: [], fields: [] },
     ];
     const edges = [
       {
@@ -410,7 +425,7 @@ describe("flow ports", () => {
 
   it("sizes a card from its ports so edges can anchor on a row", () => {
     for (const card of nodesOf(orderOnly, [])) {
-      assert.equal(heightOf(card), cardHeaderHeight + 4 * portRowHeight + 10);
+      assert.equal(heightOf(card), cardHeaderHeight + 4 * portRowHeight + cardFooterHeight);
       assert.equal(portIndexOf(card, "delete"), 3);
       assert.equal(portIndexOf(card, "nope"), -1);
     }
