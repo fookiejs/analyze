@@ -169,6 +169,26 @@ and the listings refresh every fourth tick, since their shape changes far more s
 `oldestSeq` is what makes that honest rather than merely cheap: when the ring drops entries a client
 never saw, the sidebar says how many instead of quietly skipping them.
 
+## Three bands, not one ranking
+
+The first version of this map put every node into one layered graph. That is the right answer for flow
+edges, which are a sequence and read left to right, and the wrong answer for relation edges, which are
+a shape with no order. Relations produce no rank, so every model the flows do not create fell to layer
+zero and stacked into a vertical wall — seven cards and roughly 2400px in the shop demo, beside a saga
+one or two cards deep on a canvas that was 3730x2582 and mostly empty.
+
+The map now uses vertical space to mean something:
+
+| Band   | Holds                               | Laid out as                                                           |
+| ------ | ----------------------------------- | --------------------------------------------------------------------- |
+| top    | models the flows only relate to     | a horizontal shelf, most-related first, wrapping at the spine's width |
+| middle | the flow and the externals it calls | the layered cascade, one column per step                              |
+| bottom | compensations                       | under the step each one undoes                                        |
+
+Read down a column and you get what this part of the application touches, what it does, and how it
+takes it back. Measured on the same demo: canvas height fell from 2582 to 1514 and the tallest column
+from seven cards to four.
+
 ## The map is two maps
 
 The **declared** map comes from `catalog()`: model cards, external cards, relation edges and

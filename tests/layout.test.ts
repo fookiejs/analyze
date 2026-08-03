@@ -431,3 +431,88 @@ describe("flow ports", () => {
     }
   });
 });
+
+function flowEdge(from: string, to: string, kind: string, step: number): GraphEdge {
+  return {
+    from,
+    fromPort: "card",
+    to,
+    toPort: "card",
+    kind,
+    label: String(step),
+    weight: 1,
+    step,
+    plane: "flow",
+  };
+}
+
+function yOf(placed: readonly { id: string; y: number }[], id: string): number {
+  for (const found of placed) {
+    if (found.id === id) {
+      return found.y;
+    }
+  }
+  throw new Error(`${id} was not placed`);
+}
+
+function xOf(placed: readonly { id: string; x: number }[], id: string): number {
+  for (const found of placed) {
+    if (found.id === id) {
+      return found.x;
+    }
+  }
+  throw new Error(`${id} was not placed`);
+}
+
+describe("relations sit on a shelf rather than ranking into a wall", () => {
+  const spine = [node("Order"), node("reserve"), node("charge"), node("refund")];
+  const satellites = [node("Customer"), node("Address"), node("Card"), node("Product")];
+  const wiring = [
+    flowEdge("Order", "reserve", "invokes", 1),
+    flowEdge("Order", "charge", "invokes", 2),
+    flowEdge("charge", "refund", "compensates", 0),
+    edge("Order", "Customer"),
+    edge("Order", "Address"),
+    edge("Order", "Card"),
+    edge("Product", "Customer"),
+  ];
+
+  it("gives every unranked model its own column instead of one tall stack", () => {
+    const placed = layoutOf([...spine, ...satellites], wiring).nodes;
+    const columns: number[] = [];
+    for (const name of ["Customer", "Address", "Card", "Product"]) {
+      const x = xOf(placed, name);
+      assert.equal(columns.includes(x), false, `${name} shares a column with another data model`);
+      columns.push(x);
+    }
+  });
+
+  it("keeps the shelf on one row above the flow that touches it", () => {
+    const placed = layoutOf([...spine, ...satellites], wiring).nodes;
+    const shelfY = yOf(placed, "Customer");
+    for (const name of ["Address", "Card", "Product"]) {
+      assert.equal(yOf(placed, name), shelfY, `${name} left the shelf row`);
+    }
+    assert.ok(yOf(placed, "Order") > shelfY, "the flow has to sit below the data it touches");
+  });
+
+  it("drops a compensation below the step it undoes", () => {
+    const placed = layoutOf([...spine, ...satellites], wiring).nodes;
+    assert.ok(
+      yOf(placed, "refund") > yOf(placed, "charge"),
+      "an undo belongs underneath the thing it undoes",
+    );
+  });
+
+  it("is shorter than ranking the same graph into columns would be", () => {
+    const laid = layoutOf([...spine, ...satellites], wiring);
+    let stacked = 0;
+    for (const seat of satellites) {
+      stacked = stacked + heightOf(seat);
+    }
+    assert.ok(
+      laid.height < stacked * 2,
+      `height ${String(laid.height)} should not approach a wall of ${String(stacked)}`,
+    );
+  });
+});
