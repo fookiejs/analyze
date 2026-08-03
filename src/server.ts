@@ -4,6 +4,7 @@ import { appendItem, isSagaPhase, textOrFallback } from "@fookiejs/core";
 import type { JsonValue, OutboxEntry, Phase } from "@fookiejs/core";
 import { AnalyzeError } from "./errors.ts";
 import { layoutOf } from "./graph/layout.ts";
+import { blocksOf } from "./graph/blocks.ts";
 import {
   callersFromSpans,
   declaredEdges,
@@ -237,6 +238,9 @@ export class AnalyzeServer {
     if (path === "/api/graph") {
       return sendJson(res, 200, await this.graph(req.url));
     }
+    if (path === "/api/blocks") {
+      return sendJson(res, 200, await this.blocks());
+    }
     if (path === "/api/runs") {
       return sendJson(res, 200, await this.runs(req.url));
     }
@@ -253,6 +257,25 @@ export class AnalyzeServer {
     return false;
   }
 
+  private async blocks(): Promise<unknown> {
+    const models = this.source.catalog();
+    const externals = this.source.externalCatalog();
+    const rows = await this.source.outboxList({ status: [], runId: [], limit: 500, offset: 0 });
+    const spans = this.source.observability(0).spans;
+    const runs = await this.source.runList({ phase: [], limit: 500, offset: 0 });
+    let operations: readonly OperationOf[] = [];
+    for (const run of runs) {
+      operations = appendItem(operations, { runId: run.runId, operation: run.operation });
+    }
+    for (const span of spans) {
+      if (span.operation.length < 1 || span.name.includes(".") === false) {
+        continue;
+      }
+      operations = appendItem(operations, { runId: span.traceId, operation: span.operation });
+    }
+    const callers = callersFromSpans(spans);
+    return blocksOf(models, externals, flowUsesFrom(rows, operations, callers));
+  }
   private async graph(rawUrl: http.IncomingMessage["url"] = shellPath): Promise<unknown> {
     const models = this.source.catalog();
     const externals = this.source.externalCatalog();
