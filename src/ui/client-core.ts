@@ -47,6 +47,7 @@ const state = {
   openTraces: {},
   filter: "",
   runFilter: "",
+  lastTick: 0,
   search: "",
   troubleOnly: false,
   page: 0,

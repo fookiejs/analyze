@@ -568,3 +568,26 @@ describe("finding the thing that went wrong", () => {
     assert.equal(js.includes("rows.slice(0, 300)"), false, "paging replaced the hard cut");
   });
 });
+
+describe("the dashboard survives the app it is watching restarting", () => {
+  it("does not depend on the stream alone to fetch again", () => {
+    const js = clientJs();
+    assert.ok(js.includes("heartbeatMs"), "a dead stream must not mean a dead dashboard");
+    assert.ok(js.includes("setInterval"), "something has to poll when no tick arrives");
+    assert.ok(
+      js.includes("state.lastTick"),
+      "the heartbeat has to know whether the stream is still delivering",
+    );
+  });
+
+  it("refetches the moment the stream comes back rather than waiting for a tick", () => {
+    const js = clientJs();
+    const opened = js.indexOf('stream.addEventListener("open"');
+    assert.ok(opened > 0, "the client must react to the stream opening");
+    const body = js.slice(opened, opened + 160);
+    assert.ok(
+      body.includes("refresh()"),
+      "a reconnect that only flips the pulse to live leaves the page showing nothing",
+    );
+  });
+});

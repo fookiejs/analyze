@@ -480,10 +480,28 @@ show("map");
 if (token) { refresh().catch(fail); } else { askForToken(); }
 
 const stream = new EventSource("/api/stream" + (token ? "?token=" + encodeURIComponent(token) : ""));
-stream.addEventListener("open", () => markLive(true));
-stream.addEventListener("error", () => markLive(false));
-stream.addEventListener("tick", () => {
+stream.addEventListener("open", () => {
+  markLive(true);
   refresh().catch(fail);
 });
+stream.addEventListener("error", () => markLive(false));
+stream.addEventListener("tick", () => {
+  state.lastTick = Date.now();
+  refresh().catch(fail);
+});
+
+const heartbeatMs = 5000;
+
+setInterval(() => {
+  if (!token) { return; }
+  const quiet = Date.now() - state.lastTick;
+  if (quiet < heartbeatMs) { return; }
+  refresh()
+    .then(() => {
+      state.lastTick = Date.now();
+      markLive(true);
+    })
+    .catch(fail);
+}, heartbeatMs);
 `.trim();
 }
