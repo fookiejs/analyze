@@ -1,6 +1,6 @@
 {
   "name": "@fookiejs/analyze",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A dependency-free observability UI for a fookie app: application map, live runs, logs, metrics, traces and saga state.",
   "type": "module",
   "main": "dist/index.js",

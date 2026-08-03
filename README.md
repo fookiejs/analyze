@@ -114,6 +114,30 @@ memory only, so an old request genuinely has nothing left to show.
 The canvas opens showing everything, flows and relations together, with switches to look at one plane
 at a time.
 
+## Stuck
+
+A dead letter is a step that ran out of attempts and stopped trying. The listing shows one row per
+dead letter, which is the wrong shape for the question an operator actually has. Sixty nine dead
+letters in the shop demo are four problems, not sixty nine.
+
+The Stuck view groups them by `(external, reason)` and sorts the widest cause first, so the page reads
+as a short list of things that are wrong. Each card carries the count, the models involved, how many
+attempts were spent before it gave up, and up to eight of the affected requests with a link to each
+and a **why** button that opens the failure drawer. When it lists fewer requests than the group holds
+it says how many it left out, because a silent cap reads as completeness.
+
+The fact worth putting on a card is whether the rest of the saga was undone. Each group says **every
+request rolled back**, **N left without a rollback**, or **nothing rolled back**, read from the
+compensation rows of the same runs. That is the difference between a failure that cost nothing and a
+failure that left money authorised and stock reserved.
+
+This view is what found the compensation bug fixed in core 0.2.2: the walk undid one step and
+stopped, so cards for deep failures read "nothing rolled back" while shallow ones read "every request
+rolled back". The shape of the grouping made a whole class of inconsistency visible at a glance.
+
+The search box applies here too, over the external, the model and the reason. There is no trouble
+filter, because everything on this page is trouble.
+
 ## Finding the one that broke
 
 Both listings carry a search box and a **Trouble only** switch, and both page rather than truncate.

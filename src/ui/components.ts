@@ -361,6 +361,31 @@ export function mapCss(): string {
   border-bottom: 1px solid var(--border); font-size: 12px;
 }
 .meter:last-of-type { border-bottom: 0; }
+
+.stuck {
+  border: 1px solid var(--border); border-radius: 12px; background: var(--card);
+  padding: 14px 16px; margin-bottom: 12px; box-shadow: var(--shadow);
+}
+.stuck-head { display: flex; align-items: flex-start; gap: 12px; }
+.stuck-count {
+  flex: 0 0 auto; min-width: 34px; padding: 3px 8px; border-radius: 8px;
+  text-align: center; font-size: 15px; font-weight: 600;
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+.stuck-naming { min-width: 0; }
+.stuck-name { font-size: 13.5px; font-weight: 600; margin-bottom: 5px; }
+.stuck-facts {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin: 11px 0 0 46px; font-size: 12px;
+}
+.stuck-runs { margin: 10px 0 0 46px; }
+.stuck-run {
+  display: flex; align-items: center; gap: 9px; padding: 4px 0;
+  border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.stuck-run:last-child { border-bottom: 0; }
 .meter-value { margin-left: auto; }
 
 .pager {

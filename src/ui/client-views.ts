@@ -174,7 +174,7 @@ function externalsFor(model) {
   return built;
 }
 
-function renderToolbar(host, onChange) {
+function renderToolbar(host, onChange, withTrouble) {
   const bar = el("div", { class: "toolbar" });
   const box = el("input", {
     class: "input",
@@ -189,6 +189,7 @@ function renderToolbar(host, onChange) {
   });
   bar.appendChild(box);
 
+  if (withTrouble === false) { host.appendChild(bar); return; }
   const trouble = el("button", { class: "btn" + (state.troubleOnly ? " on" : "") }, "Trouble only");
   trouble.setAttribute("aria-selected", String(state.troubleOnly));
   trouble.addEventListener("click", () => {
@@ -274,7 +275,7 @@ function renderOutbox() {
     return;
   }
   clear(host);
-  renderToolbar(host, renderOutbox);
+  renderToolbar(host, renderOutbox, true);
   const found = outboxRows();
   const shown = found.slice(state.page * pageSize, state.page * pageSize + pageSize);
   const table = el("div", {});
@@ -327,7 +328,7 @@ function renderLogs() {
     return;
   }
   clear(host);
-  renderToolbar(host, renderLogs);
+  renderToolbar(host, renderLogs, true);
   const shown = rows.slice(state.page * pageSize, state.page * pageSize + pageSize);
   const table = el("div", {});
   host.appendChild(table);
@@ -378,6 +379,7 @@ function paint() {
   byId("count-models-2").textContent = String(state.catalog.length);
   byId("count-runs").textContent = String(traceGroups().length);
   byId("count-outbox").textContent = String(state.outbox.length);
+  byId("count-stuck").textContent = String(stuckCount());
   byId("count-logs").textContent = String(state.obs.logs.length);
   const gap = byId("dropped");
   if (gap) {
@@ -388,6 +390,7 @@ function paint() {
   if (state.view === "models") { renderModels(); }
   if (state.view === "runs") { renderRuns(); }
   if (state.view === "outbox") { renderOutbox(); }
+  if (state.view === "stuck") { renderStuck(); }
   if (state.view === "logs") { renderLogs(); }
 }
 
@@ -396,6 +399,7 @@ const titles = {
   models: ["Models", "Every registered model, its columns and what it has called"],
   runs: ["Operations", "Each root operation with the flows it started underneath"],
   outbox: ["Outbox", "One row per external call attempt"],
+  stuck: ["Stuck", "Steps that exhausted their attempts, grouped by what stopped them"],
   logs: ["Logs", "Everything the flows emitted"],
 };
 

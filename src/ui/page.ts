@@ -2,6 +2,7 @@ import { mapCss, shellCss, treeCss, widgetCss } from "./components.ts";
 import { clientCoreJs } from "./client-core.ts";
 import { clientMapJs } from "./client-map.ts";
 import { clientDetailJs } from "./client-detail.ts";
+import { clientStuckJs } from "./client-stuck.ts";
 import { clientTraceJs } from "./client-trace.ts";
 import { clientViewsJs } from "./client-views.ts";
 import { themeCss } from "./theme.ts";
@@ -22,7 +23,14 @@ export function stylesCss(): string {
 }
 
 export function clientJs(): string {
-  const parts = [clientCoreJs(), clientMapJs(), clientDetailJs(), clientTraceJs(), clientViewsJs()];
+  const parts = [
+    clientCoreJs(),
+    clientMapJs(),
+    clientDetailJs(),
+    clientTraceJs(),
+    clientStuckJs(),
+    clientViewsJs(),
+  ];
   for (const part of parts) {
     if (part.length < 1) {
       throw AnalyzeError.create("every client module must carry code");
@@ -61,6 +69,7 @@ ${navItem("models", "Models", "count-models-2")}
 <div class="nav-label">Activity</div>
 ${navItem("runs", "Operations", "count-runs")}
 ${navItem("outbox", "Outbox", "count-outbox")}
+${navItem("stuck", "Stuck", "count-stuck")}
 ${navItem("logs", "Logs", "count-logs")}
 </nav>
 <div class="sidebar-foot">
@@ -132,6 +141,7 @@ ${mapViewHtml()}
 <section id="view-models" hidden><div id="models-body"></div></section>
 <section id="view-runs" hidden><div class="card"><div id="runs-body"></div></div></section>
 <section id="view-outbox" hidden><div class="card"><div id="outbox-body"></div></div></section>
+<section id="view-stuck" hidden><div id="stuck-body"></div></section>
 <section id="view-logs" hidden><div class="card"><div id="logs-body"></div></div></section>
 </div>
 </div>
