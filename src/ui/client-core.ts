@@ -37,13 +37,15 @@ const state = {
   ticks: 0,
   selectedRun: "",
   runTrail: { steps: [], phase: "", waiting: [], model: "" },
+  runRows: [],
   selectedNode: "",
   selectedPort: "",
   selectedModel: "",
-  plane: "flow",
+  plane: "both",
   focus: "",
   openTraces: {},
   filter: "",
+  runFilter: "",
   camera: { x: 40, y: 40, k: 1, ready: false },
 };
 
@@ -181,6 +183,23 @@ function fail(err) {
 }
 
 function clearFail() { byId("banner").classList.remove("on"); }
+
+function looksLikeRunId(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-/.test(String(value));
+}
+
+function runLink(runId, label) {
+  if (looksLikeRunId(runId) === false) {
+    return el("span", { class: "mono dim" }, label ? label : String(runId));
+  }
+  const shown = label ? label : shortId(runId);
+  const link = el("button", { class: "run-link", title: "Follow this request" }, shown);
+  link.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openRequest(runId).catch(fail);
+  });
+  return link;
+}
 
 const KEPT_ENTRIES = 4000;
 

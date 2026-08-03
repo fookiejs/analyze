@@ -174,41 +174,80 @@ function externalsFor(model) {
   return built;
 }
 
+function outboxRows() {
+  if (state.runFilter.length < 1) { return state.outbox; }
+  if (state.runRows.length > 0) { return state.runRows; }
+  const kept = [];
+  for (const row of state.outbox) {
+    if (row.runId !== state.runFilter) { continue; }
+    kept.push(row);
+  }
+  return kept;
+}
+
 function renderOutbox() {
   const host = byId("outbox-body");
+  if (outboxRows().length === 0 && state.runFilter.length > 0) {
+    emptyState(
+      host,
+      "This request called nothing",
+      "No external was dispatched for it, so the outbox has nothing to show.",
+    );
+    return;
+  }
   if (state.outbox.length === 0) {
     emptyState(host, "The outbox is empty", "Call an external from a flow and every attempt is recorded here.");
     return;
   }
   clear(host);
-  tableOf(host, ["External", "Model", "Status", "Attempt", "Step", "Run"], state.outbox, (row) => {
+  const shown = outboxRows();
+  tableOf(host, ["External", "Model", "Status", "Attempt", "Step", "Request"], shown, (row) => {
     const line = el("tr", {});
     cell(line, row.name);
     cell(line, row.model);
     cell(line, badge(row.status, toneForStatus(row.status)));
     cell(line, String(row.attempt), "num");
     cell(line, String(row.stepIndex), "num");
-    cell(line, el("span", { class: "mono dim" }, shortId(row.runId)));
+    cell(line, runLink(row.runId));
     return line;
   });
 }
 
+function logRows() {
+  const rows = state.obs.logs.toReversed();
+  if (state.runFilter.length < 1) { return rows; }
+  const kept = [];
+  for (const entry of rows) {
+    if (entry.traceId !== state.runFilter) { continue; }
+    kept.push(entry);
+  }
+  return kept;
+}
+
 function renderLogs() {
   const host = byId("logs-body");
-  const rows = state.obs.logs.toReversed();
+  const rows = logRows();
+  if (rows.length === 0 && state.runFilter.length > 0) {
+    emptyState(
+      host,
+      "Nothing logged for this request",
+      "Logs live in memory only, so anything older than the buffer is already gone.",
+    );
+    return;
+  }
   if (rows.length === 0) {
     emptyState(host, "No log lines yet", "Anything a flow logs shows up here as it happens.");
     return;
   }
   clear(host);
-  tableOf(host, ["", "Time", "Model", "Operation", "Message", "Run"], rows.slice(0, 300), (entry) => {
+  tableOf(host, ["", "Time", "Model", "Operation", "Message", "Request"], rows.slice(0, 300), (entry) => {
     const line = el("tr", {});
     cell(line, badge(entry.level, toneForLevel(entry.level)));
     cell(line, el("span", { class: "dim mono" }, clock(entry.timestamp)));
     cell(line, entry.model);
     cell(line, el("span", { class: "dim" }, entry.operation));
     cell(line, el("span", { class: "truncate" }, entry.message));
-    cell(line, el("span", { class: "mono dim" }, shortId(entry.traceId)));
+    cell(line, runLink(entry.traceId));
     return line;
   });
 }
@@ -276,6 +315,7 @@ function show(name) {
   for (const button of document.querySelectorAll(".nav button")) {
     button.setAttribute("aria-selected", String(button.dataset.view === name));
   }
+  renderCrumb();
   const heading = titles[name] || titles.map;
   byId("view-title").textContent = heading[0];
   byId("view-subtitle").textContent = heading[1];

@@ -66,6 +66,27 @@ export function shellCss(): string {
 .topbar .title { display: flex; flex-direction: column; gap: 1px; }
 .topbar .subtitle { color: var(--muted-foreground); font-size: 11.5px; }
 .topbar .actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.crumb {
+  display: flex; align-items: center; gap: 7px; margin-left: 16px;
+  padding: 4px 6px 4px 10px; border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--info) 35%, transparent);
+  background: color-mix(in srgb, var(--info) 10%, transparent);
+  font-size: 11.5px;
+}
+.crumb[hidden] { display: none; }
+.crumb-label {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--info);
+}
+.crumb .btn { height: 22px; padding: 0 7px; font-size: 11px; }
+
+.run-link {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px;
+  color: var(--info); text-decoration: underline; text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+.run-link:hover { color: var(--foreground); }
 
 .content { flex: 1; min-height: 0; overflow: auto; padding: 18px 20px 28px; }
 .content.flush { padding: 0; overflow: hidden; display: flex; flex-direction: column; }

@@ -177,7 +177,7 @@ function renderTrace(host, group) {
 
   head.appendChild(el("span", { class: "grow" }));
   head.appendChild(el("span", { class: "meta" }, passesOf(group).length + " passes, " + group.spans.length + " spans"));
-  head.appendChild(el("span", { class: "meta mono" }, shortId(group.traceId)));
+  head.appendChild(runLink(group.traceId));
 
   const body = el("div", { class: "trace-body" + (state.openTraces[group.traceId] ? " on" : "") });
   head.addEventListener("click", () => {
@@ -284,15 +284,60 @@ function shortRunLabel(run) {
   return run.model + "." + run.operation;
 }
 
+async function openRequest(runId) {
+  state.runFilter = runId;
+  show("map");
+  await selectRun(runId);
+  state.camera.ready = false;
+  drawMap();
+  fitMap();
+}
+
+function clearRunFilter() {
+  state.runFilter = "";
+  state.selectedRun = "";
+  state.runTrail = { steps: [], phase: "", waiting: [], model: "" };
+  renderFocusRail();
+  renderCrumb();
+  paint();
+}
+
+function renderCrumb() {
+  const crumb = byId("crumb");
+  if (!crumb) { return; }
+  clear(crumb);
+  if (state.selectedRun.length < 1) {
+    crumb.hidden = true;
+    return;
+  }
+  crumb.hidden = false;
+  crumb.appendChild(el("span", { class: "crumb-label" }, "following"));
+  crumb.appendChild(el("span", { class: "mono" }, shortId(state.selectedRun)));
+  if (state.runTrail.phase) {
+    crumb.appendChild(badge(state.runTrail.phase, toneForPhase(state.runTrail.phase)));
+  }
+  for (const target of ["map", "runs", "outbox", "logs"]) {
+    const wording = target === "runs" ? "operations" : target;
+    const jump = el("button", { class: "btn ghost" }, wording);
+    jump.addEventListener("click", () => show(target));
+    crumb.appendChild(jump);
+  }
+  const drop = el("button", { class: "btn ghost" }, "clear");
+  drop.addEventListener("click", () => clearRunFilter());
+  crumb.appendChild(drop);
+}
+
 async function selectRun(runId) {
   state.selectedRun = runId === state.selectedRun ? "" : runId;
   if (state.selectedRun.length < 1) {
     state.runTrail = { steps: [], phase: "", waiting: [], model: "" };
+    state.runRows = [];
     renderFocusRail();
     drawMap();
     return;
   }
   const rows = await load("/api/outbox?limit=200&runId=" + encodeURIComponent(state.selectedRun));
+  state.runRows = rows;
   const steps = [];
   const waiting = [];
   for (const row of rows) {
@@ -306,8 +351,13 @@ async function selectRun(runId) {
     phase = run.phase;
     model = run.model;
   }
+  if (model.length < 1) {
+    for (const row of rows) { model = row.model; }
+  }
   state.runTrail = { steps: steps, phase: phase, waiting: waiting, model: model };
+  state.runFilter = state.selectedRun;
   renderFocusRail();
+  renderCrumb();
   drawMap();
 }
 

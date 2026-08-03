@@ -369,3 +369,36 @@ describe("a single request on the map", () => {
     assert.ok(css.includes("rail-waiting"), "the rail must be able to say what it waits on");
   });
 });
+
+describe("pages that link to each other", () => {
+  it("makes a request id clickable everywhere it appears", () => {
+    const js = clientJs();
+    for (const symbol of [
+      "runLink",
+      "openRequest",
+      "renderCrumb",
+      "clearRunFilter",
+      "looksLikeRunId",
+    ]) {
+      assert.ok(js.includes(symbol), `${symbol} must reach the browser`);
+    }
+    assert.ok(js.includes("state.runFilter"), "the filter has to be shared across the views");
+    assert.ok(
+      js.includes("state.runRows"),
+      "a followed request reads its own rows, not the window",
+    );
+  });
+
+  it("opens on everything rather than hiding a plane", () => {
+    const html = indexHtml("n");
+    assert.match(html, /data-plane="both" aria-selected="true"/, "nothing is hidden by default");
+    const js = clientJs();
+    assert.ok(js.includes('plane: "both"'), "the client agrees with the markup");
+  });
+
+  it("says why a filtered view is empty instead of showing nothing", () => {
+    const js = clientJs();
+    assert.ok(js.includes("Nothing logged for this request"), "logs explain their own emptiness");
+    assert.ok(js.includes("This request called nothing"), "so does the outbox");
+  });
+});

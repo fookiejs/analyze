@@ -75,6 +75,7 @@ function topbarHtml(): string {
 <h1 id="view-title">Application map</h1>
 <div class="subtitle" id="view-subtitle">Declared relations and the calls actually observed</div>
 </div>
+<div class="crumb" id="crumb" hidden></div>
 <div class="actions">
 <div id="runs-actions" hidden><input class="input" id="runs-filter" placeholder="Filter by model, span or run id" /></div>
 <div id="map-actions" class="actions">
@@ -92,9 +93,9 @@ function mapViewHtml(): string {
 <div id="map-canvas"></div>
 <div class="focus-rail" id="focus-rail"></div>
 <div class="map-controls" id="plane-switch">
-<button class="btn ghost" data-plane="flow" aria-selected="true">Flows</button>
-<button class="btn ghost" data-plane="data" aria-selected="false">Data</button>
-<button class="btn ghost" data-plane="both" aria-selected="false">Both</button>
+<button class="btn ghost" data-plane="both" aria-selected="true">Everything</button>
+<button class="btn ghost" data-plane="flow" aria-selected="false">Flows only</button>
+<button class="btn ghost" data-plane="data" aria-selected="false">Relations only</button>
 </div>
 <div class="inspector" id="inspector"></div>
 </section>`;
