@@ -96,6 +96,14 @@ function visibleEdges() {
   return shown;
 }
 
+function edgeWalkedByRun(edge) {
+  if (!state.selectedRun) { return true; }
+  for (const step of state.runTrail.steps) {
+    if (edge.to === externalNodeIdOf(step.name)) { return true; }
+  }
+  return false;
+}
+
 function portKey(nodeId, portId) { return nodeId + "#" + portId; }
 
 function edgeKey(edge) {
@@ -183,6 +191,7 @@ function drawMap() {
     if (!from || !to) { continue; }
     let cls = "edge " + edge.kind;
     if (trail) { cls = cls + (edgeIsLit(trail, edge) ? " lit" : " faded"); }
+    if (state.selectedRun && edgeWalkedByRun(edge) === false) { cls = cls + " faded"; }
     group.appendChild(svgEl("path", {
       class: cls,
       "stroke-width": String(Math.min(1.2 + Math.log(edge.weight + 1) * 0.5, 3)),
@@ -249,9 +258,42 @@ function fieldRows(node) {
   return rows;
 }
 
+function runStatusOf(node) {
+  if (!state.selectedRun) { return ""; }
+  for (const step of state.runTrail.steps) {
+    if (externalNodeIdOf(step.name) !== node.id) { continue; }
+    return step.status;
+  }
+  if (node.kind === "model") {
+    if (node.label !== state.runTrail.model) { return "untouched"; }
+    return state.runTrail.phase ? "phase-" + state.runTrail.phase : "";
+  }
+  return "untouched";
+}
+
+function externalNodeIdOf(name) { return "external:" + name; }
+
+function statusBadge(node, status) {
+  if (!status || status === "untouched") { return null; }
+  const label = status.indexOf("phase-") === 0 ? status.slice(6) : status.replace("_", " ");
+  const group = svgEl("g", { class: "run-tag " + status });
+  const width = 8 + label.length * 6.2;
+  group.appendChild(svgEl("rect", {
+    class: "run-tag-bg",
+    x: node.x + node.width - width - 12, y: node.y + 10, width: width, height: 17, rx: "8",
+  }));
+  group.appendChild(svgEl("text", {
+    class: "run-tag-text",
+    x: node.x + node.width - width / 2 - 12, y: node.y + 22,
+  }, label));
+  return group;
+}
+
 function cardFor(node, trail) {
   const dimmed = trail && !nodeIsLit(trail, node) ? " faded" : "";
-  const wrap = svgEl("g", { class: "node " + node.kind + dimmed });
+  const status = runStatusOf(node);
+  const runClass = status ? " run-" + status : "";
+  const wrap = svgEl("g", { class: "node " + node.kind + dimmed + runClass });
   wrap.appendChild(svgEl("rect", { class: "body", x: node.x, y: node.y, width: node.width, height: node.height, rx: "11" }));
   wrap.appendChild(svgEl("path", { class: "cap", d: capPath(node) }));
   wrap.appendChild(svgEl("text", { class: "label", x: node.x + 15, y: node.y + 21 }, node.label));
@@ -263,6 +305,8 @@ function cardFor(node, trail) {
     at = at + 1;
   }
   for (const row of fieldRows(node)) { wrap.appendChild(row); }
+  const tag = statusBadge(node, status);
+  if (tag) { wrap.appendChild(tag); }
 
   wrap.addEventListener("click", (event) => {
     event.stopPropagation();

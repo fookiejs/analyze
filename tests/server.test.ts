@@ -115,7 +115,10 @@ const page = {
 const source: AnalyzeSource = {
   catalog: () => models,
   externalCatalog: () => externals,
-  observability: () => page,
+  observability: (since: number) => {
+    const logs = page.logs.filter((entry) => entry.seq > since);
+    return { ...page, logs };
+  },
   runList: async () => [runRow],
   outboxList: async () => [outboxRow],
   deadLetters: () => [],
@@ -254,6 +257,17 @@ describe("analyze server", () => {
     await res.json();
   });
 
+  it("hands out only what is newer than the cursor", async () => {
+    const everything = await auth("/api/obs?since=0");
+    const all = (await everything.json()) as { logs: readonly { seq: number }[]; nextSeq: number };
+    assert.ok(all.logs.length > 0, "the fixture has to carry a log line");
+
+    const caughtUp = await auth(`/api/obs?since=${String(all.nextSeq)}`);
+    const nothing = (await caughtUp.json()) as { logs: readonly unknown[]; nextSeq: number };
+    assert.deepEqual(nothing.logs, [], "a caught up client is sent nothing");
+    assert.equal(nothing.nextSeq, all.nextSeq, "and the cursor does not move on its own");
+  });
+
   it("answers 404 for an unknown view rather than leaking a stack", async () => {
     const res = await auth("/api/whatever");
     assert.equal(res.status, 404);
@@ -323,5 +337,35 @@ describe("query parsing", () => {
     assert.equal(queryNumber("/api/graph?depth=2", "depth", 4), 2, "an explicit value wins");
     assert.equal(queryNumber("/api/graph?depth=nope", "depth", 4), 4, "nonsense falls back");
     assert.equal(queryNumber("/api/graph?depth=0", "depth", 4), 0, "an explicit zero is honoured");
+  });
+});
+
+describe("incremental streaming", () => {
+  it("ships client code that carries the cursor rather than refetching the world", () => {
+    const js = clientJs();
+    assert.ok(js.includes("/api/obs?since=") === true, "the client must send its cursor");
+    assert.equal(js.includes('load("/api/obs?since=0")'), false, "never pinned back to zero");
+    for (const symbol of ["absorb", "keepLast", "obsCursor", "state.dropped"]) {
+      assert.ok(js.includes(symbol), `${symbol} must reach the browser`);
+    }
+  });
+});
+
+describe("a single request on the map", () => {
+  it("ships the client code that paints one run onto the cards", () => {
+    const js = clientJs();
+    for (const symbol of ["selectRun", "runStatusOf", "state.runTrail", "edgeWalkedByRun"]) {
+      assert.ok(js.includes(symbol), `${symbol} must reach the browser`);
+    }
+    assert.ok(js.includes("/api/outbox?limit=200&runId="), "it must ask for one run's steps");
+  });
+
+  it("styles every outcome a step can be in", () => {
+    const css = stylesCss();
+    for (const state of ["run-completed", "run-pending", "run-dead_letter", "run-untouched"]) {
+      assert.ok(css.includes(css.includes(state) ? state : ""), `${state} needs styling`);
+      assert.ok(css.includes(state), `${state} needs styling`);
+    }
+    assert.ok(css.includes("rail-waiting"), "the rail must be able to say what it waits on");
   });
 });

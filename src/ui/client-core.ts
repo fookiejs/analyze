@@ -32,6 +32,11 @@ const state = {
   runs: [],
   outbox: [],
   obs: { logs: [], metrics: [], spans: [], nextSeq: 0, oldestSeq: 0 },
+  obsCursor: 0,
+  dropped: 0,
+  ticks: 0,
+  selectedRun: "",
+  runTrail: { steps: [], phase: "", waiting: [], model: "" },
   selectedNode: "",
   selectedPort: "",
   selectedModel: "",
@@ -176,5 +181,30 @@ function fail(err) {
 }
 
 function clearFail() { byId("banner").classList.remove("on"); }
+
+const KEPT_ENTRIES = 4000;
+
+function keepLast(existing, arriving) {
+  if (arriving.length === 0) { return existing; }
+  const merged = existing.concat(arriving);
+  if (merged.length <= KEPT_ENTRIES) { return merged; }
+  return merged.slice(merged.length - KEPT_ENTRIES);
+}
+
+function absorb(page) {
+  const missed = state.obsCursor > 0 && page.oldestSeq > state.obsCursor + 1
+    ? page.oldestSeq - state.obsCursor - 1
+    : 0;
+  if (missed > 0) { state.dropped = state.dropped + missed; }
+  state.obs = {
+    logs: keepLast(state.obs.logs, page.logs),
+    metrics: keepLast(state.obs.metrics, page.metrics),
+    spans: keepLast(state.obs.spans, page.spans),
+    nextSeq: page.nextSeq,
+    oldestSeq: page.oldestSeq,
+  };
+  state.obsCursor = page.nextSeq;
+  return missed;
+}
 `.trim();
 }

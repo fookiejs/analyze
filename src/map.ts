@@ -1,58 +1,34 @@
 import { z } from "zod";
 import { appendItem } from "@fookiejs/core";
 import { AnalyzeError } from "./errors.ts";
-import type { ExternalSummary, ModelSummary, OutboxEntry, SpanEntry } from "@fookiejs/core";
+import type { ExternalSummary, ModelSummary } from "@fookiejs/core";
 import { dataPlane, flowPlane } from "./graph/layout.ts";
 import type { GraphEdge, GraphField, GraphNode, GraphPort } from "./graph/layout.ts";
+import {
+  cardPort,
+  compensationLabel,
+  compensatesEdgeKind,
+  externalInputPort,
+  externalNodeId,
+  externalNodeKind,
+  externalUndoPort,
+  flowOperations,
+  modelNodeId,
+  modelNodeKind,
+  relationEdgeKind,
+} from "./map-ids.ts";
+import { noCompensation } from "./map-ids.ts";
+import type { FlowUse } from "./map-ids.ts";
 
-export const modelNodeKind = "model";
-export const externalNodeKind = "external";
-
-export const relationEdgeKind = "relation";
-export const invokesEdgeKind = "invokes";
-export const nestsEdgeKind = "nests";
-export const compensatesEdgeKind = "compensates";
-
-export const flowOperations: readonly string[] = ["create", "list", "update", "delete"];
-
-export const externalInputPort = "in";
-export const externalUndoPort = "undo";
-export const cardPort = "card";
-
-export const unknownOperation = "flow";
-export const undoOperation = "undo";
-
-export const nestingLabel = "nests";
-
-export const compensationLabel = "undo";
-
-export function modelNodeId(name: string): string {
-  if (z.string().min(1).safeParse(name).success === false) {
-    throw AnalyzeError.create("model name required");
-  }
-  const id = `model:${name}`;
-  if (id.length <= "model:".length) {
-    throw AnalyzeError.create("model node id required");
-  }
-  return id;
-}
-
-export function externalNodeId(name: string): string {
-  if (z.string().min(1).safeParse(name).success === false) {
-    throw AnalyzeError.create("external name required");
-  }
-  const id = `external:${name}`;
-  if (id.length <= "external:".length) {
-    throw AnalyzeError.create("external node id required");
-  }
-  return id;
-}
-
-export type FlowUse = {
-  model: string;
-  operation: string;
-  steps: readonly string[];
-};
+export * from "./map-ids.ts";
+export {
+  callersFromSpans,
+  flowUsesFrom,
+  isCompensation,
+  observedExternalEdges,
+  observedNestingEdges,
+} from "./map-edges.ts";
+export type { CallerOf, OperationOf } from "./map-edges.ts";
 
 function usedSteps(uses: readonly FlowUse[], model: string, operation: string): readonly string[] {
   for (const use of uses) {
@@ -187,8 +163,6 @@ function flowPortsFor(
   return ports;
 }
 
-export const noCompensation = "none";
-
 function firstText(values: readonly string[]): string {
   if (Array.isArray(values) === false) {
     return noCompensation;
@@ -318,305 +292,6 @@ export function declaredEdges(
         plane: flowPlane,
       });
     }
-  }
-  return edges;
-}
-
-export type OperationOf = {
-  runId: string;
-  operation: string;
-};
-
-export type CallerOf = {
-  model: string;
-  externalName: string;
-  operation: string;
-};
-
-export function callersFromSpans(spans: readonly SpanEntry[]): readonly CallerOf[] {
-  let callers: readonly CallerOf[] = [];
-  for (const span of spans) {
-    const named = z.string().min(1).safeParse(span.attributes.externalName);
-    if (named.success === false) {
-      continue;
-    }
-    const operation = z.string().min(1).safeParse(span.operation);
-    if (operation.success === false) {
-      continue;
-    }
-    callers = appendItem(callers, {
-      model: span.model,
-      externalName: named.data,
-      operation: operation.data,
-    });
-  }
-  return callers;
-}
-
-function callerOperation(
-  callers: readonly CallerOf[],
-  model: string,
-  externalName: string,
-): readonly string[] {
-  for (const caller of callers) {
-    if (caller.model !== model) {
-      continue;
-    }
-    if (caller.externalName !== externalName) {
-      continue;
-    }
-    return [caller.operation];
-  }
-  return [];
-}
-
-function operationFor(runs: readonly OperationOf[], runId: string): string {
-  if (z.string().min(1).safeParse(runId).success === false) {
-    return unknownOperation;
-  }
-  for (const run of runs) {
-    if (run.runId !== runId) {
-      continue;
-    }
-    if (run.operation.length < 1) {
-      return unknownOperation;
-    }
-    return run.operation;
-  }
-  return unknownOperation;
-}
-
-function callingFlow(
-  row: OutboxEntry,
-  runs: readonly OperationOf[],
-  callers: readonly CallerOf[],
-): string {
-  const named = operationFor(runs, row.runId);
-  if (named !== unknownOperation) {
-    return named;
-  }
-  for (const fromSpan of callerOperation(callers, row.model, row.name)) {
-    return fromSpan;
-  }
-  return unknownOperation;
-}
-
-type CallTally = {
-  from: string;
-  fromPort: string;
-  to: string;
-  toPort: string;
-  weight: number;
-  step: number;
-};
-
-function sameEndpoints(tally: CallTally, seen: CallTally): boolean {
-  if (tally.from !== seen.from || tally.fromPort !== seen.fromPort) {
-    return false;
-  }
-  if (tally.to !== seen.to || tally.toPort !== seen.toPort) {
-    return false;
-  }
-  return true;
-}
-
-function tallyCall(counts: readonly CallTally[], seen: CallTally): readonly CallTally[] {
-  let matched = false;
-  let next: readonly CallTally[] = [];
-  for (const tally of counts) {
-    if (sameEndpoints(tally, seen) === true) {
-      matched = true;
-      next = appendItem(next, {
-        from: tally.from,
-        fromPort: tally.fromPort,
-        to: tally.to,
-        toPort: tally.toPort,
-        weight: tally.weight + 1,
-        step: Math.min(tally.step, seen.step),
-      });
-      continue;
-    }
-    next = appendItem(next, tally);
-  }
-  if (matched === false) {
-    next = appendItem(next, seen);
-  }
-  return next;
-}
-
-export function isCompensation(row: OutboxEntry): boolean {
-  if (Array.isArray(row.compensationOf) === false) {
-    return false;
-  }
-  if (row.compensationOf.length < 1) {
-    return false;
-  }
-  for (const forward of row.compensationOf) {
-    if (z.string().min(1).safeParse(forward).success === false) {
-      return false;
-    }
-    return true;
-  }
-  return false;
-}
-
-export function observedExternalEdges(
-  rows: readonly OutboxEntry[],
-  runs: readonly OperationOf[] = [],
-  callers: readonly CallerOf[] = [],
-): readonly GraphEdge[] {
-  let counts: readonly CallTally[] = [];
-  for (const row of rows) {
-    if (isCompensation(row) === true) {
-      continue;
-    }
-    const flow = callingFlow(row, runs, callers);
-    if (flowOperations.includes(flow) === false) {
-      continue;
-    }
-    counts = tallyCall(counts, {
-      from: modelNodeId(row.model),
-      fromPort: flow,
-      to: externalNodeId(row.name),
-      toPort: externalInputPort,
-      weight: 1,
-      step: row.stepIndex + 1,
-    });
-  }
-  let edges: readonly GraphEdge[] = [];
-  for (const tally of counts) {
-    edges = appendItem(edges, {
-      from: tally.from,
-      fromPort: tally.fromPort,
-      to: tally.to,
-      toPort: tally.toPort,
-      kind: invokesEdgeKind,
-      label: String(tally.step),
-      weight: tally.weight,
-      step: tally.step,
-      plane: flowPlane,
-    });
-  }
-  return edges;
-}
-
-export function flowUsesFrom(
-  rows: readonly OutboxEntry[],
-  runs: readonly OperationOf[] = [],
-  callers: readonly CallerOf[] = [],
-): readonly FlowUse[] {
-  let seen: readonly { key: string; at: number; name: string }[] = [];
-  for (const row of rows) {
-    if (isCompensation(row) === true) {
-      continue;
-    }
-    const flow = callingFlow(row, runs, callers);
-    if (flowOperations.includes(flow) === false) {
-      continue;
-    }
-    let known = false;
-    for (const hit of seen) {
-      if (hit.key === `${row.model} ${flow}` && hit.at === row.stepIndex) {
-        known = true;
-      }
-    }
-    if (known === true) {
-      continue;
-    }
-    seen = appendItem(seen, {
-      key: `${row.model} ${flow}`,
-      at: row.stepIndex,
-      name: row.name,
-    });
-  }
-  let uses: readonly FlowUse[] = [];
-  for (const hit of seen) {
-    const parts = hit.key.split(" ");
-    const model = parts.length > 0 ? parts[0] : noCompensation;
-    const operation = parts.length > 1 ? parts[1] : noCompensation;
-    if (flowOperations.includes(String(operation)) === false) {
-      continue;
-    }
-    let merged = false;
-    let next: readonly FlowUse[] = [];
-    for (const use of uses) {
-      if (use.model === model && use.operation === operation) {
-        merged = true;
-        next = appendItem(next, {
-          model: String(model),
-          operation: String(operation),
-          steps: appendItem(use.steps, hit.name),
-        });
-        continue;
-      }
-      next = appendItem(next, use);
-    }
-    const named = { model: String(model), operation: String(operation), steps: [hit.name] };
-    uses = merged === true ? next : appendItem(uses, named);
-  }
-  return uses;
-}
-
-function parentOperationOf(spans: readonly SpanEntry[], child: SpanEntry): string {
-  if (Array.isArray(child.parentModel) === false) {
-    return unknownOperation;
-  }
-  if (Array.isArray(child.parentEntityId) === false) {
-    return unknownOperation;
-  }
-  if (child.parentModel.length < 1 || child.parentEntityId.length < 1) {
-    return unknownOperation;
-  }
-  for (const span of spans) {
-    if (span.traceId !== child.traceId) {
-      continue;
-    }
-    if (span.model !== child.parentModel[0]) {
-      continue;
-    }
-    if (span.entityId !== child.parentEntityId[0]) {
-      continue;
-    }
-    const named = z.string().min(1).safeParse(span.operation);
-    if (named.success === false) {
-      continue;
-    }
-    return named.data;
-  }
-  return unknownOperation;
-}
-
-export function observedNestingEdges(spans: readonly SpanEntry[]): readonly GraphEdge[] {
-  let counts: readonly CallTally[] = [];
-  for (const span of spans) {
-    for (const parent of span.parentModel) {
-      if (parent === span.model) {
-        continue;
-      }
-      const named = z.string().min(1).safeParse(span.operation);
-      counts = tallyCall(counts, {
-        from: modelNodeId(parent),
-        fromPort: parentOperationOf(spans, span),
-        to: modelNodeId(span.model),
-        toPort: named.success === true ? named.data : unknownOperation,
-        weight: 1,
-        step: 0,
-      });
-    }
-  }
-  let edges: readonly GraphEdge[] = [];
-  for (const tally of counts) {
-    edges = appendItem(edges, {
-      from: tally.from,
-      fromPort: tally.fromPort,
-      to: tally.to,
-      toPort: tally.toPort,
-      kind: nestsEdgeKind,
-      label: nestingLabel,
-      weight: tally.weight,
-      step: tally.step,
-      plane: flowPlane,
-    });
   }
   return edges;
 }

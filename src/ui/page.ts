@@ -1,6 +1,7 @@
 import { mapCss, shellCss, treeCss, widgetCss } from "./components.ts";
 import { clientCoreJs } from "./client-core.ts";
 import { clientMapJs } from "./client-map.ts";
+import { clientTraceJs } from "./client-trace.ts";
 import { clientViewsJs } from "./client-views.ts";
 import { themeCss } from "./theme.ts";
 import { AnalyzeError } from "../errors.ts";
@@ -20,7 +21,7 @@ export function stylesCss(): string {
 }
 
 export function clientJs(): string {
-  const parts = [clientCoreJs(), clientMapJs(), clientViewsJs()];
+  const parts = [clientCoreJs(), clientMapJs(), clientTraceJs(), clientViewsJs()];
   for (const part of parts) {
     if (part.length < 1) {
       throw AnalyzeError.create("every client module must carry code");
@@ -63,6 +64,7 @@ ${navItem("logs", "Logs", "count-logs")}
 </nav>
 <div class="sidebar-foot">
 <span class="pulse" id="pulse"><span class="dot"></span><span id="pulse-text">connecting</span></span>
+<div class="dropped" id="dropped" hidden></div>
 </div>
 </aside>`;
 }

@@ -40,6 +40,7 @@ export function shellCss(): string {
 .pulse { display: inline-flex; align-items: center; gap: 7px; color: var(--muted-foreground); font-size: 11.5px; }
 .pulse .dot { width: 7px; height: 7px; border-radius: 99px; background: var(--success); }
 .pulse.stale .dot { background: var(--muted-foreground); }
+.dropped { margin-top: 6px; font-size: 10.5px; color: var(--warning); line-height: 1.35; }
 
 .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
@@ -192,6 +193,42 @@ export function mapCss(): string {
 .focus-rail button:hover { background: var(--accent); color: var(--foreground); }
 .focus-rail button[aria-selected="true"] { background: var(--accent); color: var(--foreground); font-weight: 500; }
 .focus-rail .tag { margin-left: auto; font-size: 10px; color: var(--muted-foreground); }
+.focus-rail .badge { margin-left: auto; }
+.focus-rail { width: 208px; }
+.rail-waiting {
+  margin: 6px 4px 2px; padding: 7px 8px; border-radius: 7px;
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+.rail-waiting-label {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--warning);
+}
+.rail-waiting-name { font-size: 11.5px; color: var(--foreground); margin-top: 2px; }
+
+.node.run-untouched { opacity: 0.3; }
+.node.run-completed rect.body { stroke: var(--success); }
+.node.run-completed path.cap { fill: color-mix(in srgb, var(--success) 18%, transparent); }
+.node.run-pending rect.body { stroke: var(--warning); stroke-width: 2; }
+.node.run-pending path.cap { fill: color-mix(in srgb, var(--warning) 22%, transparent); }
+.node.run-dead_letter rect.body { stroke: var(--danger); stroke-width: 2; }
+.node.run-dead_letter path.cap { fill: color-mix(in srgb, var(--danger) 20%, transparent); }
+.node.run-failed rect.body { stroke: var(--danger); }
+.node.run-phase-completed path.cap { fill: color-mix(in srgb, var(--success) 16%, transparent); }
+.node.run-phase-compensating path.cap { fill: color-mix(in srgb, var(--warning) 18%, transparent); }
+.node.run-phase-compensated path.cap { fill: color-mix(in srgb, var(--violet) 18%, transparent); }
+.node.run-phase-stuck path.cap { fill: color-mix(in srgb, var(--danger) 18%, transparent); }
+
+.run-tag-bg { fill: var(--muted); stroke: var(--border); }
+.run-tag-text {
+  fill: var(--muted-foreground); font-size: 9.5px; font-weight: 600; text-anchor: middle;
+}
+.run-tag.completed .run-tag-bg { fill: color-mix(in srgb, var(--success) 20%, transparent); stroke: var(--success); }
+.run-tag.completed .run-tag-text { fill: var(--success); }
+.run-tag.pending .run-tag-bg { fill: color-mix(in srgb, var(--warning) 24%, transparent); stroke: var(--warning); }
+.run-tag.pending .run-tag-text { fill: var(--warning); }
+.run-tag.dead_letter .run-tag-bg { fill: color-mix(in srgb, var(--danger) 22%, transparent); stroke: var(--danger); }
+.run-tag.dead_letter .run-tag-text { fill: var(--danger); }
 
 .node rect.body { fill: var(--card); stroke: var(--border); stroke-width: 1.25; }
 .node path.cap { fill: var(--muted); stroke: none; }

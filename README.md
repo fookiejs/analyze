@@ -87,6 +87,17 @@ child to parent while nesting edges point parent to child, so a model that nests
 references it forms a two node cycle. Without cycle breaking the whole map collapses into a single
 column.
 
+## One request at a time
+
+The map answers two different questions and should not confuse them. The declarative view says what
+the application _can_ do. Pick a request from the rail and the same map says what _that run_ did:
+each external card takes the colour of its outcome in that run — completed, still pending, dead
+lettered — the model card carries the run's phase, and everything the run never touched fades out.
+The rail names what it is waiting on right now, if anything.
+
+A real run reads as a sentence: reserve completed, charge dead lettered, release completed. That is a
+saga that paid for nothing and correctly gave the stock back.
+
 ## One model at a time
 
 Every model has its own lifecycle, and reading twenty of them at once is a different question from
