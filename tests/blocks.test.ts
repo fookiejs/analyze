@@ -54,12 +54,27 @@ const models = [
   model("Address", [["customer", "Customer"]]),
 ];
 
+function operationName(lane: { operation: string }): string {
+  return lane.operation;
+}
+
+function cardName(card: { name: string }): string {
+  return card.name;
+}
+
+function cardStep(card: { step: number }): number {
+  return card.step;
+}
+
+function relationTarget(row: { target: string }): string {
+  return row.target;
+}
 describe("every model is drawn as a root call", () => {
   it("gives each model a block with all four operations", () => {
     const laid = blocksOf(models, externals, uses);
     assert.equal(laid.blocks.length, models.length, "a model without traffic still gets a block");
     for (const block of laid.blocks) {
-      const named = block.lanes.map((lane) => lane.operation);
+      const named = block.lanes.map(operationName);
       assert.deepEqual(
         named,
         ["create", "list", "update", "delete"],
@@ -81,14 +96,12 @@ describe("every model is drawn as a root call", () => {
           continue;
         }
         assert.equal(lane.observed, true);
-        assert.deepEqual(
-          lane.steps.map((card) => card.name),
-          ["inventory.reserve", "payment.authorize", "notify.receipt"],
-        );
-        assert.deepEqual(
-          lane.steps.map((card) => card.step),
-          [1, 2, 3],
-        );
+        assert.deepEqual(lane.steps.map(cardName), [
+          "inventory.reserve",
+          "payment.authorize",
+          "notify.receipt",
+        ]);
+        assert.deepEqual(lane.steps.map(cardStep), [1, 2, 3]);
       }
     }
   });
@@ -130,7 +143,7 @@ describe("every model is drawn as a root call", () => {
     for (const block of laid.blocks) {
       if (block.model === "Order") {
         assert.deepEqual(
-          block.relations.map((row) => row.target),
+          block.relations.map(relationTarget),
           ["Customer", "Address"],
           "a relation is a row naming its target, which is what removed the long arrows",
         );

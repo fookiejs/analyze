@@ -99,10 +99,15 @@ function topbarHtml(): string {
 }
 
 function mapViewHtml(): string {
+  const canvas = `<div id="map-canvas"></div>`;
+  const inspector = `<div class="inspector" id="inspector"></div>`;
+  const detail = `<div class="detail" id="detail"></div>`;
+  const panels = [canvas, inspector, detail].join(String.fromCharCode(10));
+  if (panels.length < 1) {
+    throw AnalyzeError.create("the map view needs its panels");
+  }
   return `<section id="view-map" class="canvas-wrap">
-<div id="map-canvas"></div>
-<div class="inspector" id="inspector"></div>
-<div class="detail" id="detail"></div>
+${panels}
 </section>`;
 }
 
