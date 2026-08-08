@@ -33,6 +33,7 @@ export {
   observedExternalEdges,
   observedNestingEdges,
   relationEdgeKind,
+  relationNodesOf,
 } from "./map.ts";
 export { defaultSensitiveKeys, isSensitiveKey, redact, redactText } from "./redact.ts";
 export type { Redactable, RedactableKinds } from "./redact.ts";
@@ -41,6 +42,8 @@ export {
   AnalyzeServer,
   analyze,
   defaultOptions,
+  servesShell,
+  viewPaths,
   maxStreamClients,
   refreshIntervalMs,
 } from "./server.ts";

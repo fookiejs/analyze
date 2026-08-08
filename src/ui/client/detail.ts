@@ -1,66 +1,97 @@
-export function clientDetailJs(): string {
-  return `
-function jsonBlock(value) {
+import {
+  badge,
+  byId,
+  cell,
+  clear,
+  clock,
+  duration,
+  el,
+  emptyState,
+  ms,
+  runLink,
+  shortId,
+  state,
+  tableOf,
+  toneForLevel,
+  toneForPhase,
+  toneForStatus,
+} from "./core.ts";
+import type { JsonValue, LogRow, OutboxRow, SpanEntry } from "./wire.ts";
+
+function jsonBlock(value: JsonValue): HTMLElement {
   const box = el("pre", { class: "json" });
   try {
-    box.textContent = JSON.stringify(value, null, 2);
-  } catch (err) {
-    void err;
+    box.textContent = JSON.stringify(value, (_key, held: JsonValue) => held, 2);
+  } catch {
     box.textContent = String(value);
   }
   return box;
 }
 
-function stepRowsFor(externalId) {
-  const found = [];
+function stepRowsFor(externalId: string): OutboxRow[] {
+  const found: OutboxRow[] = [];
   for (const row of state.runRows) {
-    if (row.externalId === externalId) { found.push(row); }
+    if (row.externalId === externalId) {
+      found.push(row);
+    }
   }
   for (const row of state.outbox) {
-    if (row.externalId !== externalId) { continue; }
+    if (row.externalId !== externalId) {
+      continue;
+    }
     let known = false;
-    for (const hit of found) { if (hit.externalId === externalId) { known = true; } }
-    if (known === false) { found.push(row); }
+    for (const hit of found) {
+      if (hit.externalId === externalId) {
+        known = true;
+      }
+    }
+    if (known === false) {
+      found.push(row);
+    }
   }
   return found;
 }
 
-function spanForExternal(externalId) {
+function spanForExternal(externalId: string): readonly SpanEntry[] {
   for (const span of state.obs.spans) {
     const attributes = span.attributes || {};
-    if (attributes.externalId === externalId) { return span; }
+    if (attributes["externalId"] === externalId) {
+      return [span];
+    }
   }
-  return null;
+  return [];
 }
 
-function logsForRun(runId) {
-  const found = [];
+function logsForRun(runId: string): LogRow[] {
+  const found: LogRow[] = [];
   for (const entry of state.obs.logs) {
-    if (entry.traceId !== runId) { continue; }
+    if (entry.traceId !== runId) {
+      continue;
+    }
     found.push(entry);
   }
   return found.toReversed().slice(0, 20);
 }
 
-function closeStep() {
+export function closeStep(): void {
   state.selectedStep = "";
   const panel = byId("detail");
   panel.classList.remove("on");
   clear(panel);
 }
 
-function openStep(externalId) {
+export function openStep(externalId: string): void {
   state.selectedStep = externalId;
   renderStepDetail();
 }
 
-function detailHead(panel, row) {
+function detailHead(panel: HTMLElement, row: OutboxRow): void {
   const head = el("div", { class: "inspector-head" });
   const grow = el("div", { class: "grow" });
   grow.appendChild(el("h2", {}, row.name));
   grow.appendChild(el("div", { class: "card-desc mono" }, shortId(row.externalId)));
   head.appendChild(grow);
-  const close = el("button", { class: "btn icon ghost", title: "Close" }, "\\u00d7");
+  const close = el("button", { class: "btn icon ghost", title: "Close" }, "×");
   close.addEventListener("click", () => closeStep());
   head.appendChild(close);
   panel.appendChild(head);
@@ -75,15 +106,24 @@ function detailHead(panel, row) {
   panel.appendChild(chips);
 }
 
-function renderStepDetail() {
+function renderStepDetail(): void {
   const panel = byId("detail");
-  if (!panel) { return; }
-  if (state.selectedStep.length < 1) { closeStep(); return; }
+  if (!panel) {
+    return;
+  }
+  if (state.selectedStep.length < 1) {
+    closeStep();
+    return;
+  }
   const rows = stepRowsFor(state.selectedStep);
   if (rows.length < 1) {
     clear(panel);
     panel.classList.add("on");
-    emptyState(panel, "That step is no longer listed", "Fetch the request again to bring its rows back.");
+    emptyState(
+      panel,
+      "That step is no longer listed",
+      "Fetch the request again to bring its rows back.",
+    );
     return;
   }
   clear(panel);
@@ -95,12 +135,13 @@ function renderStepDetail() {
     if (row.error && row.error.length > 0) {
       panel.appendChild(el("h3", {}, "Why it failed"));
       const reason = el("div", { class: "reason" });
-      for (const line of row.error) { reason.appendChild(el("div", {}, line)); }
+      for (const line of row.error) {
+        reason.appendChild(el("div", {}, line));
+      }
       panel.appendChild(reason);
     }
 
-    const span = spanForExternal(row.externalId);
-    if (span) {
+    for (const span of spanForExternal(row.externalId)) {
       panel.appendChild(el("h3", {}, "Timing"));
       const kv = el("div", { class: "kv" });
       kv.appendChild(el("div", { class: "k" }, "started"));
@@ -115,7 +156,9 @@ function renderStepDetail() {
 
     if (row.output && row.output.length > 0) {
       panel.appendChild(el("h3", {}, "Output it returned"));
-      for (const carried of row.output) { panel.appendChild(jsonBlock(carried)); }
+      for (const carried of row.output) {
+        panel.appendChild(jsonBlock(carried));
+      }
     }
 
     panel.appendChild(el("h3", {}, "Request"));
@@ -136,17 +179,21 @@ function renderStepDetail() {
   }
 }
 
-function requestBodyOf(runId) {
+function requestBodyOf(runId: string): JsonValue[] {
   for (const run of state.runs) {
-    if (run.runId !== runId) { continue; }
+    if (run.runId !== runId) {
+      continue;
+    }
     return [run.body];
   }
   return [];
 }
 
-function renderRequestDetail(runId) {
+export function renderRequestDetail(runId: string): void {
   const panel = byId("detail");
-  if (!panel) { return; }
+  if (!panel) {
+    return;
+  }
   clear(panel);
   panel.classList.add("on");
   state.selectedStep = "";
@@ -156,7 +203,7 @@ function renderRequestDetail(runId) {
   grow.appendChild(el("h2", {}, "Request"));
   grow.appendChild(el("div", { class: "card-desc mono" }, shortId(runId)));
   head.appendChild(grow);
-  const close = el("button", { class: "btn icon ghost", title: "Close" }, "\\u00d7");
+  const close = el("button", { class: "btn icon ghost", title: "Close" }, "×");
   close.addEventListener("click", () => closeStep());
   head.appendChild(close);
   panel.appendChild(head);
@@ -164,14 +211,18 @@ function renderRequestDetail(runId) {
   if (state.runTrail.phase) {
     const chips = el("div", { class: "chips" });
     chips.appendChild(badge(state.runTrail.phase, toneForPhase(state.runTrail.phase)));
-    if (state.runTrail.model) { chips.appendChild(badge(state.runTrail.model, "info")); }
+    if (state.runTrail.model) {
+      chips.appendChild(badge(state.runTrail.model, "info"));
+    }
     panel.appendChild(chips);
   }
 
   const bodies = requestBodyOf(runId);
   if (bodies.length > 0) {
     panel.appendChild(el("h3", {}, "What was asked for"));
-    for (const body of bodies) { panel.appendChild(jsonBlock(body)); }
+    for (const body of bodies) {
+      panel.appendChild(jsonBlock(body));
+    }
   }
 
   panel.appendChild(el("h3", {}, "Steps"));
@@ -185,6 +236,4 @@ function renderRequestDetail(runId) {
     return line;
   });
   panel.appendChild(host);
-}
-`.trim();
 }

@@ -1,38 +1,62 @@
-export function clientStuckJs(): string {
-  return `
+import { badge, byId, clear, el, emptyState, runLink, state } from "./core.ts";
+import { openStep } from "./detail.ts";
+import { matchesSearch, renderToolbar } from "./views.ts";
+import type { OutboxRow } from "./wire.ts";
+import { lookup } from "./slot.ts";
+
 const deadLetterStatus = "dead_letter";
 
-function reasonOf(row) {
-  if (row.error && row.error.length > 0) { return row.error[0]; }
+export type StuckGroup = {
+  name: string;
+  reason: string;
+  models: string[];
+  rows: OutboxRow[];
+};
+
+function reasonOf(row: OutboxRow): string {
+  if (row.error && row.error.length > 0) {
+    return row.error[0] ?? "";
+  }
   return "No reason was recorded";
 }
 
-function groupKeyOf(row) {
-  return row.name + " \\u2192 " + reasonOf(row);
+function groupKeyOf(row: OutboxRow): string {
+  return row.name + " → " + reasonOf(row);
 }
 
-function stuckGroups() {
-  const byKey = {};
-  const order = [];
+export function stuckGroups(): StuckGroup[] {
+  const byKey = new Map<string, StuckGroup>();
+  const order: string[] = [];
   for (const row of state.outbox) {
-    if (row.status !== deadLetterStatus) { continue; }
-    if (matchesSearch([row.name, row.model, reasonOf(row)]) === false) { continue; }
+    if (row.status !== deadLetterStatus) {
+      continue;
+    }
+    if (matchesSearch([row.name, row.model, reasonOf(row)]) === false) {
+      continue;
+    }
     const key = groupKeyOf(row);
-    if (byKey[key] === undefined) {
-      byKey[key] = { name: row.name, reason: reasonOf(row), models: [], rows: [] };
+    if (lookup(byKey, key).length < 1) {
+      byKey.set(key, { name: row.name, reason: reasonOf(row), models: [], rows: [] });
       order.push(key);
     }
-    const group = byKey[key];
-    if (group.models.includes(row.model) === false) { group.models.push(row.model); }
-    group.rows.push(row);
+    for (const group of lookup(byKey, key)) {
+      if (group.models.includes(row.model) === false) {
+        group.models.push(row.model);
+      }
+      group.rows.push(row);
+    }
   }
-  const built = [];
-  for (const key of order) { built.push(byKey[key]); }
+  const built: StuckGroup[] = [];
+  for (const key of order) {
+    for (const group of lookup(byKey, key)) {
+      built.push(group);
+    }
+  }
   return built.toSorted((left, right) => right.rows.length - left.rows.length);
 }
 
-function compensatedRuns(group) {
-  const undone = [];
+export function compensatedRuns(group: StuckGroup): string[] {
+  const undone: string[] = [];
   for (const row of group.rows) {
     if (rollbackOf(row.runId).length > 0 && undone.includes(row.runId) === false) {
       undone.push(row.runId);
@@ -41,17 +65,21 @@ function compensatedRuns(group) {
   return undone;
 }
 
-function rollbackOf(runId) {
-  const found = [];
+function rollbackOf(runId: string): OutboxRow[] {
+  const found: OutboxRow[] = [];
   for (const row of state.outbox) {
-    if (row.runId !== runId) { continue; }
-    if (row.compensationOf.length < 1) { continue; }
+    if (row.runId !== runId) {
+      continue;
+    }
+    if (row.compensationOf.length < 1) {
+      continue;
+    }
     found.push(row);
   }
   return found;
 }
 
-function stuckHeader(card, group) {
+function stuckHeader(card: HTMLElement, group: StuckGroup): void {
   const head = el("div", { class: "stuck-head" });
   head.appendChild(el("span", { class: "stuck-count" }, String(group.rows.length)));
   const naming = el("div", { class: "stuck-naming" });
@@ -61,7 +89,7 @@ function stuckHeader(card, group) {
   card.appendChild(head);
 }
 
-function stuckFacts(card, group) {
+function stuckFacts(card: HTMLElement, group: StuckGroup): void {
   const facts = el("div", { class: "stuck-facts" });
   facts.appendChild(el("span", { class: "dim" }, "on " + group.models.join(", ")));
   facts.appendChild(el("span", { class: "dim" }, attemptWording(highestAttempt(group))));
@@ -79,27 +107,35 @@ function stuckFacts(card, group) {
   card.appendChild(facts);
 }
 
-function attemptWording(attempts) {
-  if (attempts === 1) { return "gave up on the first attempt"; }
+function attemptWording(attempts: number): string {
+  if (attempts === 1) {
+    return "gave up on the first attempt";
+  }
   return "gave up after " + String(attempts) + " attempts";
 }
 
-function highestAttempt(group) {
+function highestAttempt(group: StuckGroup): number {
   let highest = 0;
   for (const row of group.rows) {
-    if (row.attempt > highest) { highest = row.attempt; }
+    if (row.attempt > highest) {
+      highest = row.attempt;
+    }
   }
   return highest;
 }
 
 const stuckRunsShown = 8;
 
-function stuckAffected(card, group) {
+function stuckAffected(card: HTMLElement, group: StuckGroup): void {
   const list = el("div", { class: "stuck-runs" });
-  const seen = [];
+  const seen: string[] = [];
   for (const row of group.rows) {
-    if (seen.length >= stuckRunsShown) { break; }
-    if (seen.includes(row.runId)) { continue; }
+    if (seen.length >= stuckRunsShown) {
+      break;
+    }
+    if (seen.includes(row.runId)) {
+      continue;
+    }
     seen.push(row.runId);
     const line = el("div", { class: "stuck-run" });
     line.appendChild(el("span", { class: "dim mono" }, "step " + String(row.stepIndex)));
@@ -111,12 +147,14 @@ function stuckAffected(card, group) {
   }
   const hidden = group.rows.length - seen.length;
   if (hidden > 0) {
-    list.appendChild(el("div", { class: "dim" }, String(hidden) + " more requests hit the same wall"));
+    list.appendChild(
+      el("div", { class: "dim" }, String(hidden) + " more requests hit the same wall"),
+    );
   }
   card.appendChild(list);
 }
 
-function renderStuck() {
+export function renderStuck(): void {
   const host = byId("stuck-body");
   const groups = stuckGroups();
   if (groups.length === 0 && state.search.length > 0) {
@@ -142,12 +180,12 @@ function renderStuck() {
   }
 }
 
-function stuckCount() {
+export function stuckCount(): number {
   let total = 0;
   for (const row of state.outbox) {
-    if (row.status === deadLetterStatus) { total = total + 1; }
+    if (row.status === deadLetterStatus) {
+      total = total + 1;
+    }
   }
   return total;
-}
-`;
 }

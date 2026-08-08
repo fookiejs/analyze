@@ -3,7 +3,7 @@ import http from "node:http";
 import { appendItem, isSagaPhase, textOrFallback } from "@fookiejs/core";
 import type { JsonValue, OutboxEntry, Phase } from "@fookiejs/core";
 import { AnalyzeError } from "./errors.ts";
-import { layoutOf } from "./graph/layout.ts";
+import { dataPlane, flowPlane, layoutOf } from "./graph/layout.ts";
 import { blocksOf } from "./graph/blocks.ts";
 import {
   callersFromSpans,
@@ -14,6 +14,7 @@ import {
   nodesOf,
   observedExternalEdges,
   observedNestingEdges,
+  relationNodesOf,
   touchedFlows,
 } from "./map.ts";
 import type { OperationOf } from "./map.ts";
@@ -41,6 +42,25 @@ export const refreshIntervalMs = 3_000;
 export const maxStreamClients = 16;
 
 export const shellPath = "/";
+
+export const viewPaths: readonly string[] = [
+  "/",
+  "/map",
+  "/models",
+  "/runs",
+  "/outbox",
+  "/stuck",
+  "/logs",
+];
+
+export function servesShell(path: string): boolean {
+  for (const known of viewPaths) {
+    if (known === path) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export const completedOutboxStatus = "completed";
 
@@ -71,17 +91,6 @@ function listenPortOf(port: readonly string[]): readonly number[] {
     return [parsed];
   }
   return [];
-}
-
-function modelNames(models: readonly { name: string }[]): readonly string[] {
-  let names: readonly string[] = [];
-  for (const model of models) {
-    if (model.name.length < 1) {
-      continue;
-    }
-    names = appendItem(names, model.name);
-  }
-  return names;
 }
 
 function phasesFrom(rawUrl: http.IncomingMessage["url"]): readonly Phase[] {
@@ -213,7 +222,7 @@ export class AnalyzeServer {
       sendJson(res, 403, { error: "cross origin requests are refused" });
       return false;
     }
-    if (pathOf(req.url) === shellPath) {
+    if (servesShell(pathOf(req.url)) === true) {
       const pageNonce = nonce();
       return sendHtml(res, indexHtml(pageNonce), pageNonce);
     }
@@ -308,7 +317,25 @@ export class AnalyzeServer {
     for (const asked of queryList(rawUrl, "focus")) {
       focus = [asked];
     }
-    const detailed = focus.length > 0 ? focus : modelNames(models);
+    let plane = flowPlane;
+    for (const asked of queryList(rawUrl, "plane")) {
+      plane = asked === dataPlane ? dataPlane : flowPlane;
+    }
+    if (plane === dataPlane) {
+      const cards = relationNodesOf(models);
+      const relations = declaredEdges(models, []);
+      for (const only of focus) {
+        const narrowed = focusedGraph(
+          cards,
+          relations,
+          only,
+          queryNumber(rawUrl, "depth", maxFocusDepth),
+        );
+        return layoutOf(narrowed.nodes, narrowed.edges, dataPlane);
+      }
+      return layoutOf(cards, relations, dataPlane);
+    }
+    const detailed = focus.length > 0 ? focus : [];
     const cards = nodesOf(models, externals, uses, touchedFlows(edges), detailed);
     for (const only of focus) {
       const narrowed = focusedGraph(
@@ -317,9 +344,9 @@ export class AnalyzeServer {
         only,
         queryNumber(rawUrl, "depth", maxFocusDepth),
       );
-      return layoutOf(narrowed.nodes, narrowed.edges);
+      return layoutOf(narrowed.nodes, narrowed.edges, flowPlane);
     }
-    return layoutOf(cards, edges);
+    return layoutOf(cards, edges, flowPlane);
   }
 
   private async runs(rawUrl: http.IncomingMessage["url"]): Promise<unknown> {

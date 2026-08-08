@@ -181,9 +181,9 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 export function mapCss(): string {
   return `
-.canvas-wrap { position: relative; flex: 1; min-height: 0; width: 100%; overflow: hidden; background: var(--background); }
-#map-canvas { position: absolute; inset: 0; }
-.canvas-wrap svg { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.canvas-wrap { position: relative; flex: 1; min-height: 0; width: 100%; height: 100%; overflow: hidden; background: var(--background); }
+#map-canvas, #models-body { position: absolute; inset: 0; width: 100%; height: 100%; }
+.canvas-wrap svg { width: 100%; height: 100%; min-width: 100%; min-height: 100%; display: block; cursor: grab; touch-action: none; }
 .canvas-wrap svg.dragging { cursor: grabbing; }
 
 .map-dots { fill: var(--border); }
@@ -282,12 +282,41 @@ export function mapCss(): string {
 .port.lit circle.port-dot.in { opacity: 1; }
 
 .edge { fill: none; stroke: var(--muted-foreground); opacity: 0.5; }
-.edge.relation { stroke: var(--violet); stroke-dasharray: 5 4; }
+.edge.relation { stroke: var(--violet); stroke-dasharray: none; stroke-width: 1.8; opacity: 1; }
 .edge.invokes { stroke: var(--info); }
 .edge.compensates { stroke: var(--warning); stroke-dasharray: 2 3; }
 .edge.nests { stroke: var(--success); }
 .edge.faded { opacity: 0.07; }
 .edge.lit { opacity: 1; stroke-width: 2.2; }
+
+.edge-hit { cursor: pointer; }
+.edge-hit .edge-hitbox {
+  fill: none; stroke: transparent; stroke-width: 16; pointer-events: stroke;
+}
+.edge-hit .edge {
+  transition: stroke-width 140ms ease, opacity 140ms ease, filter 140ms ease;
+}
+.edge-hit .edge-label {
+  transition: fill 140ms ease, font-size 140ms ease;
+}
+.edge-hit.raised .edge {
+  opacity: 1;
+  stroke-width: 3.4;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--violet) 75%, transparent));
+}
+.edge-hit.raised .edge.invokes {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--info) 75%, transparent));
+}
+.edge-hit.raised .edge.compensates {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--warning) 75%, transparent));
+}
+.edge-hit.raised .edge.nests {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--success) 75%, transparent));
+}
+.edge-hit.raised .edge-label {
+  fill: var(--foreground);
+  font-size: 11.5px;
+}
 
 .arrow { stroke: none; }
 .arrow.relation { fill: var(--violet); }

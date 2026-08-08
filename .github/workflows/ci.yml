@@ -34,8 +34,12 @@ jobs:
         run: npm run format:check
       - name: typecheck (src, must be clean)
         run: npm run typecheck
+      - name: typecheck (browser client)
+        run: npm run typecheck:client
       - name: typecheck (src + tests)
         run: npm run typecheck:all
+      - name: the committed client bundle matches src/ui/client
+        run: npm run check:client
       - name: build
         run: npm run build
 
@@ -88,7 +92,7 @@ jobs:
           KNOWN_DEBT: ""
         run: |
           status=0
-          for f in $(find src -name '*.ts' | sort); do
+          for f in $(find src -name '*.ts' -not -name '*.generated.ts' | sort); do
             n=$(wc -l < "$f")
             case " $KNOWN_DEBT " in
               *" $f "*)
@@ -127,7 +131,7 @@ jobs:
             echo ''
             echo '| module | lines |'
             echo '| --- | --- |'
-            find src -name '*.ts' -exec sh -c 'echo "| \`$1\` | $(wc -l < "$1") |"' _ {} \; | sort -t'|' -k3 -rn
+            find src -name '*.ts' -not -name '*.generated.ts' -exec sh -c 'echo "| \`$1\` | $(wc -l < "$1") |"' _ {} \; | sort -t'|' -k3 -rn
           } >> "$GITHUB_STEP_SUMMARY"
 
   dependency-review:

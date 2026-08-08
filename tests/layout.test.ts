@@ -17,6 +17,7 @@ import {
   nodesOf,
   observedExternalEdges,
   observedNestingEdges,
+  relationNodesOf,
 } from "../src/map.ts";
 import type { ExternalSummary, ModelSummary, OutboxEntry, SpanEntry } from "@fookiejs/core";
 
@@ -190,6 +191,7 @@ describe("application map", () => {
     for (const relation of relations) {
       assert.equal(relation.from, modelNodeId("Order"));
       assert.equal(relation.to, modelNodeId("User"));
+      assert.equal(relation.fromPort, "buyer", "the arrow leaves the column that owns the link");
       assert.equal(relation.label, "buyer", "the edge names the column that carries the link");
     }
   });
@@ -430,6 +432,12 @@ describe("flow ports", () => {
       assert.equal(portIndexOf(card, "nope"), -1);
     }
   });
+
+  it("keeps create/list off the relations cards", () => {
+    for (const card of relationNodesOf(orderOnly)) {
+      assert.deepEqual(card.ports, [], "relations show tables, not flow operations");
+    }
+  });
 });
 
 function flowEdge(from: string, to: string, kind: string, step: number): GraphEdge {
@@ -552,11 +560,15 @@ describe("relations sit on a shelf rather than ranking into a wall", () => {
     );
   });
 
-  it("keeps the shelf a couple of rows deep however many models there are", () => {
-    const seven = shelfRows(world(7).nodes);
-    assert.ok(seven <= 2, `seven models spread over ${String(seven)} rows`);
-    const fifteen = shelfRows(world(15).nodes);
-    assert.ok(fifteen <= 4, `fifteen models spread over ${String(fifteen)} rows`);
-    assert.ok(fifteen < 15, "a shelf that grows a row per model is the wall wearing a hat");
+  it("when no flow spine, models rank by relations instead of a shelf grid", () => {
+    const nodes = [node("a"), node("b"), node("c")];
+    const laid = layoutOf(nodes, [edge("a", "b"), edge("b", "c")], "flow");
+    assert.ok(
+      xOf(laid.nodes, "c") > xOf(laid.nodes, "a"),
+      "without invokes the map still follows the relation chain left to right",
+    );
+    const leftmost = Math.min(...laid.nodes.map((seat) => seat.x));
+    const rightmost = Math.max(...laid.nodes.map((seat) => seat.x));
+    assert.ok(rightmost - leftmost > 100, "a chain must open horizontally, not sit in one shelf cell");
   });
 });

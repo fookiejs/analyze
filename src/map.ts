@@ -225,6 +225,24 @@ function fieldRowsFor(model: ModelSummary, detailed: boolean): readonly GraphFie
   return rows;
 }
 
+export function relationNodesOf(models: readonly ModelSummary[]): readonly GraphNode[] {
+  let nodes: readonly GraphNode[] = [];
+  for (const model of models) {
+    if (z.string().min(1).safeParse(model.name).success === false) {
+      throw AnalyzeError.create("model name required");
+    }
+    nodes = appendItem(nodes, {
+      id: modelNodeId(model.name),
+      label: model.name,
+      kind: modelNodeKind,
+      subtitle: `${model.table} · ${String(model.fields.length)} fields`,
+      ports: [],
+      fields: fieldRowsFor(model, true),
+    });
+  }
+  return nodes;
+}
+
 export function nodesOf(
   models: readonly ModelSummary[],
   externals: readonly ExternalSummary[],
@@ -266,7 +284,7 @@ export function declaredEdges(
       for (const target of field.relation) {
         edges = appendItem(edges, {
           from: modelNodeId(model.name),
-          fromPort: cardPort,
+          fromPort: field.key,
           to: modelNodeId(target),
           toPort: cardPort,
           kind: relationEdgeKind,

@@ -24,7 +24,10 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:client": "node scripts/build-client.mjs",
+    "check:client": "node scripts/build-client.mjs --check",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:client": "tsc -p tsconfig.client.json --noEmit",
     "typecheck:all": "tsc -p tsconfig.lint.json --noEmit",
     "test": "node --import tsx --test \"tests/*.test.ts\"",
     "lint": "eslint .",
@@ -36,6 +39,7 @@
     "@fookiejs/core": ">=0.2.0"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.1.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -44,6 +48,7 @@
     "@types/node": "^26.0.1",
     "@types/pg": "^8.20.0",
     "@typescript-eslint/parser": "^8.0.0",
+    "esbuild": "^0.28.1",
     "eslint": "^10.6.0",
     "pg": "^8.22.0",
     "prettier": "^3.8.1",

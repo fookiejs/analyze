@@ -124,8 +124,12 @@ export function bootClient(): Sandbox {
     document: documentStub,
     sessionStorage: storage,
     localStorage: storage,
-    window: { location: { search: "", href: "" }, addEventListener: () => undefined },
-    location: { search: "", href: "" },
+    window: {
+      location: { search: "", href: "", pathname: "/" },
+      addEventListener: () => undefined,
+    },
+    location: { search: "", href: "", pathname: "/", replace: () => undefined },
+    history: { pushState: () => undefined, replaceState: () => undefined },
     fetch: async () => ({ ok: true, json: async () => ({}) }),
     EventSource: class {
       addEventListener(): void {
@@ -154,6 +158,7 @@ export function bootClient(): Sandbox {
     Error,
   });
   vm.runInContext(clientJs(), context, { filename: "analyze-client.js" });
+  vm.runInContext("Object.assign(globalThis, fookieAnalyze)", context);
   return {
     call: <T>(expression: string) => vm.runInContext(expression, context) as T,
     read: <T>(expression: string) => {

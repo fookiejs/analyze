@@ -38,8 +38,12 @@ jobs:
         run: npm run format:check
       - name: typecheck
         run: npm run typecheck
+      - name: typecheck (browser client)
+        run: npm run typecheck:client
       - name: typecheck (src plus tests)
         run: npm run typecheck:all
+      - name: the committed client bundle matches src/ui/client
+        run: npm run check:client
       - name: build
         run: npm run build
       - name: test

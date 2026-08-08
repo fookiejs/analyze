@@ -327,7 +327,7 @@ describe("the page it serves", () => {
       "wireCamera",
       "buildTree",
       "passesOf",
-      "renderModelDetail",
+      "drawRelations",
     ]) {
       assert.ok(js.includes(symbol), `${symbol} must reach the browser`);
     }
@@ -410,8 +410,19 @@ describe("pages that link to each other", () => {
     assert.match(html, /Relations/, "relations get their own entry in the nav");
     const js = clientJs();
     assert.equal(js.includes("state.plane"), false, "and the client no longer tracks a plane");
-    assert.ok(js.includes('edge.plane !== "flow"'), "the map draws flow edges and nothing else");
-    assert.ok(js.includes("relationList"), "relations are listed where they belong");
+    assert.ok(
+      js.includes("drawnPlane.name = flowPlane"),
+      "the map draws the flow plane and nothing else",
+    );
+    assert.ok(
+      js.includes("drawnPlane.name = dataPlane"),
+      "and relations draw the data plane, so neither view borrows the other's edges",
+    );
+    assert.equal(
+      js.includes("grid cards"),
+      false,
+      "relations are a drawing with arrows, not a list of cards",
+    );
   });
 
   it("says why a filtered view is empty instead of showing nothing", () => {

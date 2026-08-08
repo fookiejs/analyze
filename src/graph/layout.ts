@@ -1,17 +1,7 @@
 import { z } from "zod";
 import { appendItem } from "@fookiejs/core";
 import { AnalyzeError } from "../errors.ts";
-import {
-  bandAssignment,
-  bandFor,
-  bandGap,
-  columnAssignment,
-  dataBand,
-  spineBand,
-  undoBand,
-  shelfOrder,
-} from "./bands.ts";
-import type { BandOf } from "./bands.ts";
+import dagre from "@dagrejs/dagre";
 
 export type GraphPort = {
   id: string;
@@ -84,12 +74,21 @@ export function heightOf(node: GraphNode): number {
   if (Array.isArray(node.ports) === false) {
     throw AnalyzeError.create("graph node ports required");
   }
-  if (node.ports.length < 1) {
+  if (Array.isArray(node.fields) === false) {
+    throw AnalyzeError.create("graph node fields required");
+  }
+  if (node.ports.length < 1 && node.fields.length < 1) {
     return plainNodeHeight;
   }
-  let height = cardHeaderHeight + node.ports.length * portRowHeight + cardFooterHeight;
+  let height = cardHeaderHeight + cardFooterHeight;
+  if (node.ports.length > 0) {
+    height = height + node.ports.length * portRowHeight;
+  }
   if (node.fields.length > 0) {
-    height = height + sectionHeaderHeight + node.fields.length * fieldRowHeight;
+    if (node.ports.length > 0) {
+      height = height + sectionHeaderHeight;
+    }
+    height = height + node.fields.length * fieldRowHeight;
   }
   if (height < cardHeaderHeight) {
     throw AnalyzeError.create("a card is at least its header tall");
@@ -113,14 +112,25 @@ export function portAnchorY(node: PlacedNode, portId: string): number {
     return node.y + node.height / 2;
   }
   const index = portIndexOf(node, portId);
-  if (index < 0) {
-    return node.y + node.height / 2;
+  if (index >= 0) {
+    const anchor = node.y + cardHeaderHeight + index * portRowHeight + portRowHeight / 2;
+    if (anchor < node.y) {
+      throw AnalyzeError.create("a port anchor sits inside its card");
+    }
+    return anchor;
   }
-  const anchor = node.y + cardHeaderHeight + index * portRowHeight + portRowHeight / 2;
-  if (anchor < node.y) {
-    throw AnalyzeError.create("a port anchor sits inside its card");
+  let fieldAt = 0;
+  for (const field of node.fields) {
+    if (field.key === portId) {
+      let top = node.y + cardHeaderHeight + node.ports.length * portRowHeight;
+      if (node.ports.length > 0) {
+        top = top + sectionHeaderHeight;
+      }
+      return top + fieldAt * fieldRowHeight + fieldRowHeight / 2;
+    }
+    fieldAt = fieldAt + 1;
   }
-  return anchor;
+  return node.y + node.height / 2;
 }
 
 function idsOf(nodes: readonly GraphNode[]): readonly string[] {
@@ -288,10 +298,10 @@ function sameLayers(left: readonly LayerOf[], right: readonly LayerOf[]): boolea
   return true;
 }
 
-function rankingEdges(edges: readonly GraphEdge[]): readonly GraphEdge[] {
+function rankingEdges(edges: readonly GraphEdge[], plane: string): readonly GraphEdge[] {
   let flowing: readonly GraphEdge[] = [];
   for (const edge of edges) {
-    if (edge.plane !== flowPlane) {
+    if (edge.plane !== plane) {
       continue;
     }
     flowing = appendItem(flowing, edge);
@@ -305,9 +315,10 @@ function rankingEdges(edges: readonly GraphEdge[]): readonly GraphEdge[] {
 export function layerAssignment(
   nodes: readonly GraphNode[],
   edges: readonly GraphEdge[],
+  plane: string = flowPlane,
 ): readonly LayerOf[] {
   const ids = idsOf(nodes);
-  const forward = acyclicEdges(ids, rankingEdges(keptEdges(edges, ids)));
+  const forward = acyclicEdges(ids, rankingEdges(keptEdges(edges, ids), plane));
   let layers: readonly LayerOf[] = [];
   for (const id of ids) {
     layers = appendItem(layers, { id, layer: 0 });
@@ -322,247 +333,296 @@ export function layerAssignment(
   return layers;
 }
 
-function incomingCount(edges: readonly GraphEdge[], id: string): number {
-  let total = 0;
-  for (const edge of edges) {
-    if (edge.to === id) {
-      total += 1;
-    }
-  }
-  return total;
-}
 
-function earliestStep(edges: readonly GraphEdge[], id: string): number {
-  let earliest = 0;
-  for (const edge of edges) {
-    if (edge.to !== id) {
-      continue;
-    }
-    if (edge.step < 1) {
-      continue;
-    }
-    if (earliest === 0 || edge.step < earliest) {
-      earliest = edge.step;
-    }
-  }
-  return earliest === 0 ? 999 : earliest;
-}
 
-function orderKeyOf(edges: readonly GraphEdge[], node: GraphNode): string {
-  if (z.string().min(1).safeParse(node.id).success === false) {
-    throw AnalyzeError.create("graph node id required");
-  }
-  const step = String(earliestStep(edges, node.id)).padStart(4, "0");
-  const incoming = incomingCount(edges, node.id);
-  const padded = String(1000 - incoming).padStart(4, "0");
-  if (padded.length < 4) {
-    throw AnalyzeError.create("order key must sort lexically");
-  }
-  return `${step}:${padded}:${node.label}`;
-}
 
-function seatsIn(
-  nodes: readonly GraphNode[],
-  columns: readonly LayerOf[],
-  bands: readonly BandOf[],
-  band: number,
-  column: number,
-  edges: readonly GraphEdge[],
-): readonly GraphNode[] {
-  let seated: readonly GraphNode[] = [];
-  for (const node of nodes) {
-    if (bandFor(bands, node.id) !== band) {
-      continue;
-    }
-    if (layerFor(columns, node.id) !== column) {
-      continue;
-    }
-    seated = appendItem(seated, node);
-  }
-  return seated.toSorted((left, right) =>
-    orderKeyOf(edges, left).localeCompare(orderKeyOf(edges, right)),
-  );
-}
 
-function deepestOf(nodes: readonly GraphNode[], columns: readonly LayerOf[]): number {
-  let deepest = 0;
-  for (const node of nodes) {
-    const column = layerFor(columns, node.id);
-    if (column > deepest) {
-      deepest = column;
-    }
-  }
-  return deepest;
-}
 
-type BandFill = {
-  placed: readonly PlacedNode[];
-  height: number;
-};
 
-function fillBand(
-  nodes: readonly GraphNode[],
-  columns: readonly LayerOf[],
-  bands: readonly BandOf[],
-  band: number,
-  edges: readonly GraphEdge[],
-): BandFill {
-  const deepest = deepestOf(nodes, columns);
-  let placed: readonly PlacedNode[] = [];
-  let height = 0;
-  for (let column = 0; column <= deepest; column += 1) {
-    let cursor = 0;
-    for (const seat of seatsIn(nodes, columns, bands, band, column, edges)) {
-      placed = appendItem(placed, {
-        id: seat.id,
-        label: seat.label,
-        kind: seat.kind,
-        subtitle: seat.subtitle,
-        ports: seat.ports,
-        fields: seat.fields,
-        layer: column,
-        x: column * (nodeWidth + columnGap),
-        y: cursor,
-        width: nodeWidth,
-        height: heightOf(seat),
-      });
-      cursor = cursor + heightOf(seat) + rowGap;
-    }
-    const used = cursor > 0 ? cursor - rowGap : 0;
-    if (used > height) {
-      height = used;
-    }
-  }
-  return { placed, height };
-}
 
-function fillShelf(
+
+export function layoutOf(
   nodes: readonly GraphNode[],
   edges: readonly GraphEdge[],
-  bands: readonly BandOf[],
-  perRow: number,
-): BandFill {
-  const shelved = shelfOrder(nodes, edges, bands);
-  const stride = nodeWidth + columnGap;
-  let placed: readonly PlacedNode[] = [];
-  let rowTop = 0;
-  let rowTall = 0;
-  let index = 0;
-  for (const seat of shelved) {
-    const slot = index % perRow;
-    if (slot === 0 && index > 0) {
-      rowTop = rowTop + rowTall + rowGap;
-      rowTall = 0;
-    }
-    const height = heightOf(seat);
-    placed = appendItem(placed, {
-      id: seat.id,
-      label: seat.label,
-      kind: seat.kind,
-      subtitle: seat.subtitle,
-      ports: seat.ports,
-      fields: seat.fields,
-      layer: slot,
-      x: slot * stride,
-      y: rowTop,
-      width: nodeWidth,
-      height,
-    });
-    if (height > rowTall) {
-      rowTall = height;
-    }
-    index += 1;
-  }
-  return { placed, height: rowTop + rowTall };
-}
-function shifted(nodes: readonly PlacedNode[], down: number): readonly PlacedNode[] {
-  let moved: readonly PlacedNode[] = [];
-  for (const node of nodes) {
-    moved = appendItem(moved, {
-      id: node.id,
-      label: node.label,
-      kind: node.kind,
-      subtitle: node.subtitle,
-      ports: node.ports,
-      fields: node.fields,
-      layer: node.layer,
-      x: node.x,
-      y: node.y + down,
-      width: node.width,
-      height: node.height,
-    });
-  }
-  return moved;
-}
-
-export function layoutOf(nodes: readonly GraphNode[], edges: readonly GraphEdge[]): Layout {
+  plane: string = flowPlane,
+): Layout {
   if (nodes.length < 1) {
     return { nodes: [], edges: [], width: 0, height: 0 };
   }
-  const ids = idsOf(nodes);
+  let kept: readonly GraphNode[] = nodes;
+  if (plane === dataPlane) {
+    let models: readonly GraphNode[] = [];
+    for (const node of nodes) {
+      if (node.kind === "model") {
+        models = appendItem(models, node);
+      }
+    }
+    kept = models;
+  }
+  if (kept.length < 1) {
+    return { nodes: [], edges: [], width: 0, height: 0 };
+  }
+  const ids = idsOf(kept);
   const usable = keptEdges(edges, ids);
-  const layers = layerAssignment(nodes, usable);
-  const bands = bandAssignment(nodes, usable);
-  const columns = columnAssignment(nodes, usable, layers, bands);
+
+  const linkedIds = new Set<string>();
+  for (const edge of usable) {
+    if (edge.plane !== plane || edge.from === edge.to) {
+      continue;
+    }
+    linkedIds.add(edge.from);
+    linkedIds.add(edge.to);
+  }
+  let linked: readonly GraphNode[] = [];
+  let loose: readonly GraphNode[] = [];
+  for (const node of kept) {
+    if (linkedIds.has(node.id)) {
+      linked = appendItem(linked, node);
+    } else {
+      loose = appendItem(loose, node);
+    }
+  }
+
+  if (plane === flowPlane && flowSpineHasModel(linked) === false) {
+    return layoutFlowFromRelations(kept, usable);
+  }
+
+  const engine = new dagre.graphlib.Graph();
+  engine.setGraph({
+    rankdir: plane === dataPlane ? "TB" : "LR",
+    nodesep: plane === dataPlane ? 48 : 64,
+    ranksep: plane === dataPlane ? 120 : 160,
+    edgesep: 40,
+    marginx: layoutMargin,
+    marginy: layoutMargin,
+  });
+  engine.setDefaultEdgeLabel(() => ({}));
+  for (const node of linked) {
+    engine.setNode(node.id, { width: nodeWidth, height: heightOf(node) });
+  }
+  for (const edge of usable) {
+    if (edge.plane !== plane || edge.from === edge.to) {
+      continue;
+    }
+    engine.setEdge(edge.from, edge.to);
+  }
+  dagre.layout(engine);
 
   let placed: readonly PlacedNode[] = [];
-  let cursor = 0;
-  const perRow = Math.max(deepestOf(nodes, columns) + 1, 1);
-  for (const band of [dataBand, spineBand, undoBand]) {
-    const filled =
-      band === dataBand
-        ? fillShelf(nodes, usable, bands, perRow)
-        : fillBand(nodes, columns, bands, band, usable);
-    if (filled.placed.length < 1) {
-      continue;
-    }
-    const seated = band === dataBand ? filled.placed : centreColumns(filled.placed, filled.height);
-    for (const node of shifted(seated, cursor)) {
-      placed = appendItem(placed, node);
-    }
-    cursor = cursor + filled.height + bandGap;
-  }
-
-  const deepest = deepestOf(nodes, columns);
-  const tall = cursor > 0 ? cursor - bandGap : 1;
-  return {
-    nodes: placed,
-    edges: usable,
-    width: (deepest + 1) * nodeWidth + deepest * columnGap,
-    height: Math.max(tall, 1),
-  };
-}
-function columnHeight(nodes: readonly PlacedNode[], column: number): number {
-  let lowest = 0;
-  for (const placed of nodes) {
-    if (placed.layer !== column) {
-      continue;
-    }
-    if (placed.y + placed.height > lowest) {
-      lowest = placed.y + placed.height;
+  let widest = 1;
+  const ranks = new Map<string, number>();
+  const shelf = shelfGrid(loose, Math.max(widest, 1));
+  for (const seated of shelf.placed) {
+    placed = appendItem(placed, seated);
+    if (seated.x + seated.width > widest) {
+      widest = seated.x + seated.width;
     }
   }
-  return lowest;
-}
-
-function centreColumns(nodes: readonly PlacedNode[], tallest: number): readonly PlacedNode[] {
-  let centred: readonly PlacedNode[] = [];
-  for (const node of nodes) {
-    const used = columnHeight(nodes, node.layer);
-    const shift = Math.max((tallest - used) / 2, 0);
-    centred = appendItem(centred, {
+  let tallest = shelf.height;
+  const drop = shelf.height > 0 ? shelf.height + bandGapRows : 0;
+  for (const node of linked) {
+    const seat = engine.node(node.id);
+    const tall = heightOf(node);
+    const x = seat.x - nodeWidth / 2;
+    const y = seat.y - tall / 2 + drop;
+    const rank = plane === dataPlane ? Math.round(seat.y) : Math.round(seat.x);
+    if (ranks.has(rank.toString()) === false) {
+      ranks.set(rank.toString(), ranks.size);
+    }
+    placed = appendItem(placed, {
       id: node.id,
       label: node.label,
       kind: node.kind,
       subtitle: node.subtitle,
       ports: node.ports,
       fields: node.fields,
-      layer: node.layer,
-      x: node.x,
-      y: node.y + shift,
-      width: node.width,
-      height: node.height,
+      layer: seatRankOf(ranks, rank.toString()),
+      x,
+      y,
+      width: nodeWidth,
+      height: tall,
     });
+    if (x + nodeWidth > widest) {
+      widest = x + nodeWidth;
+    }
+    if (y + tall > tallest) {
+      tallest = y + tall;
+    }
   }
-  return centred;
+  return {
+    nodes: placed,
+    edges: usable,
+    width: widest + layoutMargin,
+    height: Math.max(tallest, 1) + layoutMargin,
+  };
 }
+
+function flowSpineHasModel(linked: readonly GraphNode[]): boolean {
+  for (const node of linked) {
+    if (node.kind === "model") {
+      return true;
+    }
+  }
+  return false;
+}
+
+function layoutFlowFromRelations(kept: readonly GraphNode[], usable: readonly GraphEdge[]): Layout {
+  let models: readonly GraphNode[] = [];
+  let externals: readonly GraphNode[] = [];
+  for (const node of kept) {
+    if (node.kind === "model") {
+      models = appendItem(models, node);
+    } else {
+      externals = appendItem(externals, node);
+    }
+  }
+  const engine = new dagre.graphlib.Graph();
+  engine.setGraph({
+    rankdir: "LR",
+    nodesep: 64,
+    ranksep: 160,
+    edgesep: 40,
+    marginx: layoutMargin,
+    marginy: layoutMargin,
+  });
+  engine.setDefaultEdgeLabel(() => ({}));
+  for (const node of models) {
+    engine.setNode(node.id, { width: nodeWidth, height: heightOf(node) });
+  }
+  for (const edge of usable) {
+    if (edge.plane !== dataPlane || edge.from === edge.to) {
+      continue;
+    }
+    if (engine.hasNode(edge.from) === false || engine.hasNode(edge.to) === false) {
+      continue;
+    }
+    engine.setEdge(edge.from, edge.to);
+  }
+  if (models.length > 0) {
+    dagre.layout(engine);
+  }
+
+  let placed: readonly PlacedNode[] = [];
+  let widest = 1;
+  let tallest = 1;
+  const ranks = new Map<string, number>();
+  for (const node of models) {
+    const seat = engine.node(node.id);
+    const tall = heightOf(node);
+    const x = seat.x - nodeWidth / 2;
+    const y = seat.y - tall / 2;
+    const rank = Math.round(seat.x);
+    if (ranks.has(rank.toString()) === false) {
+      ranks.set(rank.toString(), ranks.size);
+    }
+    placed = appendItem(placed, {
+      id: node.id,
+      label: node.label,
+      kind: node.kind,
+      subtitle: node.subtitle,
+      ports: node.ports,
+      fields: node.fields,
+      layer: seatRankOf(ranks, rank.toString()),
+      x,
+      y,
+      width: nodeWidth,
+      height: tall,
+    });
+    if (x + nodeWidth > widest) {
+      widest = x + nodeWidth;
+    }
+    if (y + tall > tallest) {
+      tallest = y + tall;
+    }
+  }
+
+  const shelf = shelfGrid(externals, Math.max(widest, 1));
+  const drop = tallest > 1 ? tallest + bandGapRows : 0;
+  for (const seated of shelf.placed) {
+    placed = appendItem(placed, {
+      id: seated.id,
+      label: seated.label,
+      kind: seated.kind,
+      subtitle: seated.subtitle,
+      ports: seated.ports,
+      fields: seated.fields,
+      layer: seated.layer,
+      x: seated.x,
+      y: seated.y + drop,
+      width: seated.width,
+      height: seated.height,
+    });
+    if (seated.x + seated.width > widest) {
+      widest = seated.x + seated.width;
+    }
+    if (seated.y + drop + seated.height > tallest) {
+      tallest = seated.y + drop + seated.height;
+    }
+  }
+
+  return {
+    nodes: placed,
+    edges: usable,
+    width: widest + layoutMargin,
+    height: Math.max(tallest, 1) + layoutMargin,
+  };
+}
+
+export const shelfGap = 40;
+export const bandGapRows = 90;
+
+function shelfGrid(
+  loose: readonly GraphNode[],
+  minWidth: number,
+): { placed: readonly PlacedNode[]; height: number } {
+  if (loose.length < 1) {
+    return { placed: [], height: 0 };
+  }
+  const perRow = Math.max(Math.ceil(Math.sqrt(loose.length)), 4);
+  let placed: readonly PlacedNode[] = [];
+  let rowTop = layoutMargin;
+  let rowTall = 0;
+  let at = 0;
+  for (const node of loose) {
+    const column = at % perRow;
+    if (column === 0 && at > 0) {
+      rowTop = rowTop + rowTall + shelfGap;
+      rowTall = 0;
+    }
+    const tall = heightOf(node);
+    placed = appendItem(placed, {
+      id: node.id,
+      label: node.label,
+      kind: node.kind,
+      subtitle: node.subtitle,
+      ports: node.ports,
+      fields: node.fields,
+      layer: column,
+      x: layoutMargin + column * (nodeWidth + shelfGap),
+      y: rowTop,
+      width: nodeWidth,
+      height: tall,
+    });
+    if (tall > rowTall) {
+      rowTall = tall;
+    }
+    at = at + 1;
+  }
+  if (minWidth > 0) {
+    return { placed, height: rowTop + rowTall };
+  }
+  return { placed, height: rowTop + rowTall };
+}
+
+export const layoutMargin = 48;
+
+function seatRankOf(ranks: Map<string, number>, key: string): number {
+  for (const held of ranks) {
+    if (held[0] === key) {
+      return held[1];
+    }
+  }
+  return 0;
+}
+
+

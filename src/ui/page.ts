@@ -1,10 +1,5 @@
 import { mapCss, shellCss, treeCss, widgetCss } from "./components.ts";
-import { clientCoreJs } from "./client-core.ts";
-import { clientMapJs } from "./client-map.ts";
-import { clientDetailJs } from "./client-detail.ts";
-import { clientStuckJs } from "./client-stuck.ts";
-import { clientTraceJs } from "./client-trace.ts";
-import { clientViewsJs } from "./client-views.ts";
+import { clientBundleJs } from "./client-bundle.generated.ts";
 import { themeCss } from "./theme.ts";
 import { AnalyzeError } from "../errors.ts";
 
@@ -23,23 +18,13 @@ export function stylesCss(): string {
 }
 
 export function clientJs(): string {
-  const parts = [
-    clientCoreJs(),
-    clientMapJs(),
-    clientDetailJs(),
-    clientTraceJs(),
-    clientStuckJs(),
-    clientViewsJs(),
-  ];
-  for (const part of parts) {
-    if (part.length < 1) {
-      throw AnalyzeError.create("every client module must carry code");
-    }
-    if (part.includes("</script") === true) {
-      throw AnalyzeError.create("client code may not close its own script tag");
-    }
+  if (clientBundleJs.length < 1) {
+    throw AnalyzeError.create("the client bundle must carry code");
   }
-  return parts.join("\n\n");
+  if (clientBundleJs.includes("</script") === true) {
+    throw AnalyzeError.create("client code may not close its own script tag");
+  }
+  return clientBundleJs;
 }
 
 function navItem(view: string, label: string, countId: string): string {
@@ -137,7 +122,7 @@ ${topbarHtml()}
 <div class="content flush" id="content">
 <div class="banner" id="banner"></div>
 ${mapViewHtml()}
-<section id="view-models" hidden><div id="models-body"></div></section>
+<section id="view-models" class="canvas-wrap" hidden><div id="models-body"></div></section>
 <section id="view-runs" hidden><div class="card"><div id="runs-body"></div></div></section>
 <section id="view-outbox" hidden><div class="card"><div id="outbox-body"></div></div></section>
 <section id="view-stuck" hidden><div id="stuck-body"></div></section>
